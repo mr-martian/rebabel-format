@@ -283,3 +283,7 @@ class RBBLFile:
                     ('child', child), ('child_type', ctyp),
                     ('isprimary', primary), ('active', True),
                     ('date', self.now()))
+
+    def get_all_features(self):
+        self.cur.execute('SELECT * FROM tiers')
+        return self.cur.fetchall()
