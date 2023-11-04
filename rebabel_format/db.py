@@ -118,6 +118,7 @@ class RBBLFile:
             self.commit()
             return ret
         return _fn
+
     def __init__(self, pth, create=True):
         self.path = pth
         if not os.path.exists(pth):
@@ -131,19 +132,24 @@ class RBBLFile:
         self.cur = self.con.cursor()
         self.current_time = None
         self.committing = True
+
     def first(self, qr, *args):
         self.cur.execute(qr + ' LIMIT 1', args)
         return self.cur.fetchone()
+
     def now(self):
         if self.current_time is None:
             return datetime.datetime.now()
         else:
             return self.current_time
+
     def commit(self):
         if self.committing:
             self.con.commit()
+
     def set_time(self, dt):
         self.current_time = dt
+
     @commit_group
     def insert(self, table, *args):
         cols = []
@@ -155,6 +161,7 @@ class RBBLFile:
             vals.append(v)
         q = f'INSERT INTO {table}({", ".join(cols)}) VALUES({", ".join(qs)})'
         self.cur.execute(q, vals)
+
     def ensure_type(self, typename: str) -> bool:
         '''Ensure that a unit type named `typename` exists.
         return whether it was created.'''
@@ -164,6 +171,7 @@ class RBBLFile:
                         ('unittype', typename), ('valuetype', 'bool'))
             return True
         return False
+
     @commit_group
     def create_feature(self, unittype, tier, feature, valuetype):
         if valuetype not in ['int', 'bool', 'str', 'ref']:
@@ -172,6 +180,7 @@ class RBBLFile:
         # TODO: check if already exists
         self.insert('tiers', ('tier', tier), ('feature', feature),
                     ('unittype', unittype), ('valuetype', valuetype))
+
     def get_feature(self, unittype, tier, feature, error=False):
         ret =  self.first('SELECT id, valuetype FROM tiers WHERE unittype = ? AND tier = ? AND feature = ?', unittype, tier, feature)
         if ret is None:
@@ -179,32 +188,37 @@ class RBBLFile:
                 raise ValueError('Feature %s:%s does not exist for unit type %s.' % (tier, feature, unittype))
             return None, None
         return ret
+
     @commit_group
     def create_unit(self, unittype: str, user=None) -> int:
         self.ensure_type(unittype)
         meta, _ = self.get_feature(unittype, 'meta', 'active')
-        dt = self.now()
-        self.insert('units', ('type', unittype), ('created', dt),
-                    ('modified', dt), ('active', True))
+        self.insert('units', ('type', unittype), ('created', self.now()),
+                    ('modified', self.now()), ('active', True))
         uid = self.cur.lastrowid
         if user:
             self.insert('bool_features', ('unit', uid), ('feature', meta),
-                        ('value', True), ('date', dt), ('active', True),
+                        ('value', True), ('date', self.now()), ('active', True),
                         ('user', user))
         else:
             self.insert('bool_features', ('unit', uid), ('feature', meta),
-                        ('value', False), ('date', dt), ('active', True))
+                        ('value', False), ('date', self.now()), ('active', True))
+        return uid
+
     def get_unit_type(self, unitid: int) -> str:
         ret = self.first('SELECT type FROM units WHERE id = ?', unitid)
         if ret is None:
             raise ValueError('Unit %s does not exist.' % unitid)
-        return ret
+        return ret[0]
+
     @commit_group
     def modify_unit(self, unitid: int):
         self.cur.execute('UPDATE units SET modified = ? WHERE id = ?',
                          (self.now(), unitid))
+
     def _clear_feature(self, unitid, featid, feattype):
-        self.cur.execute('UPDATE %s_features SET active = ? WHERE unit = ? AND feature = ?' % feattyp, (False, unitid, featid))
+        self.cur.execute('UPDATE %s_features SET active = ? WHERE unit = ? AND feature = ?' % feattype, (False, unitid, featid))
+
     def check_type(self, typename, value):
         if typename == 'str' and not isinstance(value, str):
             raise ValueError()
@@ -212,6 +226,7 @@ class RBBLFile:
             raise ValueError()
         elif typename in ['int', 'ref'] and not isinstance(value, int):
             raise ValueError()
+
     @commit_group
     def set_feature(self, unitid: int, tier: str, feature: str, value,
                     user: str, confidence: int = 1):
@@ -223,6 +238,7 @@ class RBBLFile:
         self.insert('%s_features' % typ, ('unit', unitid), ('feature', fid),
                     ('value', value), ('user', user), ('confidence', confidence),
                     ('date', self.now()), ('active', True))
+
     @commit_group
     def set_feature_dist(self, unitid: int, tier: str, feature: str,
                          values, normalize=True):
@@ -245,6 +261,7 @@ class RBBLFile:
                         ('date', self.now()), ('probability', p/total),
                         ('active', True))
         self.modify_unit(unitid)
+
     @commit_group
     def rem_parent(self, parent: int, child: int, primary_only=False):
         qr = 'UPDATE relations SET active = ? WHERE parent = ? AND child = ?'
@@ -253,6 +270,7 @@ class RBBLFile:
             qr += ' AND isprimary = ?'
             args.append(True)
         self.cur.execute(qr, args)
+
     @commit_group
     def set_parent(self, parent: int, child: int, primary=True, clear=True):
         ptyp = self.get_unit_type(parent)
