@@ -76,11 +76,18 @@ class MetaReader(type):
 class Reader(BaseReader, metaclass=MetaReader):
     pass
 
-def read_new(in_pths, out_pth, mode, username):
+def read_new(conf):
+    from ..config import get_param, get_single_param
+    import os
+    mode = get_single_param(conf, 'import', 'mode')
     if mode not in ALL_READERS:
         raise ValueError(f'Unknown reader {mode}.')
-    db = RBBLFile(out_pth)
+    out_path = get_single_param(conf, 'import', 'db')
+    db = RBBLFile(out_path)
+    username = get_single_param(conf, 'import', 'username')
+    username = username or os.environ.get('USER', 'import-script')
     r = ALL_READERS[mode](db, username)
+    in_pths = get_single_param(conf, 'import', 'infiles')
     for pth in in_pths:
         fin = r.open_file(pth)
         r.read_file(fin)

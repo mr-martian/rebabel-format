@@ -182,7 +182,7 @@ class RBBLFile:
                     ('unittype', unittype), ('valuetype', valuetype))
 
     def get_feature(self, unittype, tier, feature, error=False):
-        ret =  self.first('SELECT id, valuetype FROM tiers WHERE unittype = ? AND tier = ? AND feature = ?', unittype, tier, feature)
+        ret = self.first('SELECT id, valuetype FROM tiers WHERE unittype = ? AND tier = ? AND feature = ?', unittype, tier, feature)
         if ret is None:
             if error:
                 raise ValueError('Feature %s:%s does not exist for unit type %s.' % (tier, feature, unittype))
@@ -287,3 +287,28 @@ class RBBLFile:
     def get_all_features(self):
         self.cur.execute('SELECT * FROM tiers')
         return self.cur.fetchall()
+
+    def get_units(self, unittype: str, parent=None):
+        if parent is None:
+            self.cur.execute(
+                'SELECT id FROM units WHERE type = ? AND active = ?',
+                (unittype, True),
+            )
+        else:
+            self.cur.execute(
+                'SELECT child FROM relations WHERE parent = ? AND child_type = ? AND active = ? AND isprimary = ?',
+                (parent, unittype, True, True),
+            )
+        return [x[0] for x in self.cur.fetchall()]
+
+    def get_unit_features(self, unitid: int, features):
+        plc = ', '.join(['?']*len(features))
+        ret = {}
+        for typ in ['bool', 'int', 'str', 'ref']:
+            self.cur.execute(
+                f'SELECT feature, value FROM {typ}_features WHERE unit = ? AND active = ? AND feature IN ({plc}) AND user IS NOT NULL',
+                [unitid, True] + features,
+            )
+            for f, v in self.cur.fetchall():
+                ret[f] = v
+        return ret

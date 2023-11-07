@@ -5,39 +5,23 @@ def main():
     from . import db
     from . import converters
     from .converters.reader import read_new, ALL_DESCRIPTIONS
+    from .converters.writer import write
+    from . import config
     import os
     from collections import defaultdict
     parser = argparse.ArgumentParser(
         description='Process reBabel annotation files')
-    parser.set_defaults(action='')
-    subs = parser.add_subparsers()
-
-    imp_parser = subs.add_parser(
-        'import', help='Convert files from other format into reBabel')
-    imp_parser.add_argument('mode', choices=sorted(ALL_DESCRIPTIONS.keys()),
-                            help='File type to read')
-    imp_parser.add_argument('db', action='store',
-                            help='Path to write the reBabel database to')
-    imp_parser.add_argument('infiles', nargs='+', help='Files to convert')
-    usr = os.environ.get('USER', 'import-script')
-    imp_parser.add_argument('--user', '-u', action='store', default=usr,
-                            help=f'Username for imported data (default: {usr})')
-    imp_parser.set_defaults(action='import')
-
-    insp_parser = subs.add_parser(
-        'inspect', help='Get information about the structure of a reBabel file')
-    insp_parser.add_argument('db', action='store', help='reBabel file to read')
-    insp_parser.add_argument(
-        '--schema', action='store_true',
-        help='generate a schema of types and features in the file')
-    insp_parser.set_defaults(action='inspect')
+    parser.add_argument('action', choices=['import', 'inspect', 'export'])
+    parser.add_argument('config', action='store', help='TOML configuration file')
 
     args = parser.parse_args()
+    conf = config.read_config(args.config)
+
     if args.action == 'import':
-        read_new(args.infiles, args.db, args.mode, args.user)
+        read_new(conf)
     elif args.action == 'inspect':
-        f = db.RBBLFile(args.db)
-        if args.schema:
+        f = db.RBBLFile(config.get_single_param(conf, 'inspect', 'db'))
+        if config.get_single_param(conf, 'inspect', 'schema'):
             feats = f.get_all_features()
             fd = defaultdict(lambda: defaultdict(list))
             for fid, tier, name, utype, vtype in feats:
@@ -53,3 +37,5 @@ def main():
                             continue
                         print(f'\t\t{feat}: {vtype}')
                 print('')
+    elif args.action == 'export':
+        write(conf)
