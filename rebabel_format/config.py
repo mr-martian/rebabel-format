@@ -27,3 +27,11 @@ def get_param(conf, *locs):
 
 def get_single_param(conf, action, key):
     return get_param(conf, [action, key], key)
+
+def parse_feature(obj):
+    if isinstance(obj, str) and obj.count(':') == 1:
+        return obj.split(':')
+    elif isinstance(obj, dict) and 'tier' in obj and 'feature' in obj:
+        return obj['tier'], obj['feature']
+    else:
+        raise ValueError(f'Invalid feature specifier {obj}.')

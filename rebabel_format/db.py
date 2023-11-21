@@ -312,3 +312,11 @@ class RBBLFile:
             for f, v in self.cur.fetchall():
                 ret[f] = v
         return ret
+
+    def get_feature_value(self, unitid: int, featid: int, feattype: str):
+        if feattype not in ['bool', 'int', 'str', 'ref']:
+            raise ValueError(f'Unknown value type {feattype}.')
+        ret = self.first(f'SELECT value FROM {feattype}_features WHERE unit = ? AND active = ? AND feature = ? AND user IS NOT NULL', unitid, True, featid)
+        if ret is not None:
+            ret = ret[0]
+        return ret

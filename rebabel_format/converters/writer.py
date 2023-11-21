@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from ..db import RBBLFile
+from ..config import parse_feature
 
 ALL_WRITERS = {}
 
@@ -22,15 +23,7 @@ class BaseWriter:
                 if not isinstance(fd, dict):
                     continue
                 for featname, spec in fd.items():
-                    to_tier = None
-                    to_feat = None
-                    if isinstance(spec, dict):
-                        to_tier = spec.get('tier')
-                        to_feat = spec.get('feature')
-                    elif isinstance(spec, str) and spec.count(':') == 1:
-                        to_tier, to_feat = spec.split(':')
-                    if to_tier is None or to_feat is None:
-                        raise ValueError('Invalid feature specifier %s.' % spec)
+                    to_tier, to_feat = parse_feature(spec)
                     i, _ = self.db.get_feature(k, tier, featname, error=True)
                     self.feat_mapping[(to_type, to_tier, to_feat)] = i
                     self.rev_feat_mapping[i] = (to_type, to_tier, to_feat)

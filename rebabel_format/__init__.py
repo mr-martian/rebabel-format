@@ -3,6 +3,7 @@
 def main():
     import argparse
     from . import db
+    from . import query
     from . import converters
     from .converters.reader import read_new, ALL_DESCRIPTIONS
     from .converters.writer import write
@@ -11,7 +12,7 @@ def main():
     from collections import defaultdict
     parser = argparse.ArgumentParser(
         description='Process reBabel annotation files')
-    parser.add_argument('action', choices=['import', 'inspect', 'export'])
+    parser.add_argument('action', choices=['import', 'inspect', 'export', 'query'])
     parser.add_argument('config', action='store', help='TOML configuration file')
 
     args = parser.parse_args()
@@ -39,3 +40,5 @@ def main():
                 print('')
     elif args.action == 'export':
         write(conf)
+    elif args.action == 'query':
+        query.search_conf(conf)
