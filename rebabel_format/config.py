@@ -35,3 +35,10 @@ def parse_feature(obj):
         return obj['tier'], obj['feature']
     else:
         raise ValueError(f'Invalid feature specifier {obj}.')
+
+def get_user(conf, action):
+    user = get_single_param(conf, action, 'username')
+    if user is None:
+        import os
+        user = os.environ.get('USER', action+'-script')
+    return user
