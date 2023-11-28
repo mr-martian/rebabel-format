@@ -76,6 +76,14 @@ class MetaReader(type):
 class Reader(BaseReader, metaclass=MetaReader):
     pass
 
+class XMLReader(Reader):
+    def open_file(self, pth):
+        import xml.etree.ElementTree as ET
+        return ET.parse(pth).getroot()
+
+    def close_file(self, fin):
+        pass
+
 def read_new(conf):
     from ..config import get_param, get_single_param, get_user
     mode = get_single_param(conf, 'import', 'mode')

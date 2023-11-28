@@ -162,6 +162,7 @@ class RBBLFile:
         q = f'INSERT INTO {table}({", ".join(cols)}) VALUES({", ".join(qs)})'
         self.cur.execute(q, vals)
 
+    @commit_group
     def ensure_type(self, typename: str) -> bool:
         '''Ensure that a unit type named `typename` exists.
         return whether it was created.'''

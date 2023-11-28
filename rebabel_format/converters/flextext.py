@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
 
-from .reader import Reader
-import xml.etree.ElementTree as ET
+from .reader import XMLReader
 
-class FlextextReader(Reader):
+class FlextextReader(XMLReader):
     identifier = 'flextext'
     short_name = 'FlexText'
     long_name = 'SIL Fieldworks Language Explorer XML glossed text'
 
-    def open_file(self, pth):
+    def read_file(self, fin):
         self.db.committing = False
         self.db.current_time = self.db.now()
-        return ET.parse(pth).getroot()
-
-    def close_file(self, fin):
+        self.iter_nodes(fin)
         self.db.committing = True
         self.db.current_time = None
         self.db.commit()
-
-    def read_file(self, fin):
-        self.iter_nodes(fin)
 
     def iter_nodes(self, node, parent=None):
         known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
