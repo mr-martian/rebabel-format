@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from .reader import XMLReader
+from .writer import Writer
 
 class FlextextReader(XMLReader):
     identifier = 'flextext'
@@ -15,10 +16,13 @@ class FlextextReader(XMLReader):
         self.db.current_time = None
         self.db.commit()
 
-    def iter_nodes(self, node, parent=None):
+    def iter_nodes(self, node, parent=None, idx=0):
         known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
         if node.tag in known:
             uid = self.create_unit(node.tag, parent=parent)
+            self.ensure_feature(node.tag, 'meta', 'index', 'int')
+            self.set_feature(uid, 'meta', 'index', idx)
+            i = 1
             for ch in node:
                 if ch.tag == 'item':
                     tier = 'FlexText/'+ch.attrib.get('lang', 'None')
@@ -27,7 +31,66 @@ class FlextextReader(XMLReader):
                     self.ensure_feature(node.tag, tier, feat, 'str')
                     self.set_feature(uid, tier, feat, val)
                 else:
-                    self.iter_nodes(ch, parent=uid)
+                    self.iter_nodes(ch, parent=uid, idx=i)
+                    i += 1
         else:
             for ch in node:
-                self.iter_nodes(ch, parent=parent)
+                self.iter_nodes(ch, parent=parent, idx=idx)
+
+class FlextextWriter(Writer):
+    identifier = 'flextext'
+
+    def write(self, fout):
+        import xml.etree.ElementTree as ET
+        tiers = [x for x in self.all_tiers() if x.startswith('FlexText/')]
+        tiers.append('meta')
+        feat_dict = self.all_feats_from_tiers(tiers)
+        feat_list = list(feat_dict.keys())
+        meta_index = None
+        for k, v in feat_dict.items():
+            if v == ('meta', 'index', 'int'):
+                meta_index = k
+
+        def mkel(node, seq, parent):
+            indent = 5 - len(seq)
+            group, single = seq[0]
+            units = list(self.iter_units(single, feat_list, parent))
+            if meta_index is not None:
+                units.sort(key=lambda x: x[1].get(meta_index, -1))
+            if node is None:
+                group_el = ET.Element(group)
+            else:
+                group_el = ET.SubElement(node, group)
+            group_el.text = '\n  ' + '  '*indent*2
+            ind = '\n    ' + '  '*indent*2
+            for uid, feats in units:
+                unit_el = ET.SubElement(group_el, single)
+                unit_el.text = ind
+                for k, v in sorted(feats.items()):
+                    tier, feat, typ = feat_dict[k]
+                    if not tier.startswith('FlexText/'):
+                        continue
+                    feat_el = ET.SubElement(unit_el, 'item')
+                    feat_el.set('type', feat)
+                    feat_el.set('lang', tier[9:])
+                    feat_el.text = str(v)
+                    feat_el.tail = ind
+                if len(seq) > 1:
+                    e = mkel(unit_el, seq[1:], uid)
+                    e.tail = ind
+                if indent > 0 and len(unit_el) > 0:
+                    unit_el[-1].tail = unit_el[-1].tail[:-2]
+                unit_el.tail = ind[:-2]
+            if len(group_el) > 0:
+                group_el[-1].tail = group_el[-1].tail[:-2]
+            return group_el
+        top = mkel(None,
+                   [('document', 'interlinear-text'),
+                    ('paragraphs', 'paragraph'),
+                    ('phrases', 'phrase'),
+                    ('words', 'word'),
+                    ('morphemes', 'morph')],
+                   None)
+        top.set('version', '2')
+        tree = ET.ElementTree(element=top)
+        tree.write(fout, encoding='unicode', xml_declaration=True)
