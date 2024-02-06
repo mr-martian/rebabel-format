@@ -28,6 +28,9 @@ class BaseWriter:
                     self.feat_mapping[(to_type, to_tier, to_feat)] = i
                     self.rev_feat_mapping[i] = (to_type, to_tier, to_feat)
 
+    def all_tiers(self):
+        return set(x[1] for x in self.db.get_all_features())
+
     def all_feats_from_tiers(self, tiers):
         ret = {}
         keep = [v for k,v in self.feat_mapping.items() if k[1] in tiers]
