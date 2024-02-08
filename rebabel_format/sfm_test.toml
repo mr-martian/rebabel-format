@@ -1,0 +1,31 @@
+db = 'blah3.db'
+[import]
+username='aconeil'
+mode='sfm'
+infiles= ['manipuri.sfm']
+
+[inspect]
+schema=true
+
+[export]
+mode = 'flextext'
+outfile = 'halb.flextext'
+
+[mapping.sentence]
+type = 'phrase'
+SFM.reference = 'FlexText/mni:segnum' 
+SFM.translation = 'FlexText/en:gls'
+
+[mapping.word]
+type = 'word'
+sentence.form = 'FlexText/mni:txt'
+
+[mapping.morpheme]
+type = 'morph'
+SFM.form = 'FlexText/mni:gls'
+SFM.gls = 'FlexText/en:pos'
+
+[query.A]
+type = 'sentence'
+features = [{tier = 'SFM', feature='translation', value_startswith = "You"}]
+print = ['SFM:reference','SFM:translation']
