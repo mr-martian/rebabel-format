@@ -29,7 +29,10 @@ class BaseWriter:
                     self.rev_feat_mapping[i] = (to_type, to_tier, to_feat)
 
     def all_tiers(self):
-        return set(x[1] for x in self.db.get_all_features())
+        ret = set(x[1] for x in self.db.get_all_features())
+        for typ, tier, feat in self.feat_mapping:
+            ret.add(tier)
+        return ret
 
     def all_feats_from_tiers(self, tiers):
         ret = {}
