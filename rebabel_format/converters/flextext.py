@@ -2,6 +2,7 @@
 
 from .reader import XMLReader
 from .writer import Writer
+from ..config import get_single_param
 
 class FlextextReader(XMLReader):
     identifier = 'flextext'
@@ -84,13 +85,30 @@ class FlextextWriter(Writer):
             if len(group_el) > 0:
                 group_el[-1].tail = group_el[-1].tail[:-2]
             return group_el
-        top = mkel(None,
-                   [('document', 'interlinear-text'),
-                    ('paragraphs', 'paragraph'),
-                    ('phrases', 'phrase'),
-                    ('words', 'word'),
-                    ('morphemes', 'morph')],
-                   None)
+        layers = [('document', 'interlinear-text'),
+                  ('paragraphs', 'paragraph'),
+                  ('phrases', 'phrase'),
+                  ('words', 'word'),
+                  ('morphemes', 'morph')]
+        null_layers = []
+        used_layers = layers[:]
+        top_layer = get_single_param(self.conf, 'export', 'root')
+        if top_layer is not None:
+            for i in range(5):
+                if layers[i][1] == top_layer:
+                    null_layers = layers[:i]
+                    used_layers = layers[i:]
+                    break
+            else:
+                raise ValueError(f"Unknown value for 'root' in flextext export '{top_layer}'.")
+        top = mkel(None, used_layers, None)
+        for t1, t2 in reversed(null_layers):
+            new_el = ET.Element(t1)
+            sub = ET.SubElement(new_el, t2)
+            sub.text = '\n'
+            top.tail = '\n'
+            sub.append(top)
+            top = new_el
         top.set('version', '2')
         tree = ET.ElementTree(element=top)
         tree.write(fout, encoding='unicode', xml_declaration=True)
