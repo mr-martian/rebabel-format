@@ -33,6 +33,10 @@ class BaseReader:
             self.db.set_parent(parent, uid)
         return uid
 
+    def create_unit_with_features(self, unittype, features, parent=None):
+        return self.db.create_unit_with_features(unittype, features, self.user,
+                                                 parent=parent)
+
     def set_feature(self, uid, tier, name, value):
         self.db.set_feature(uid, tier, name, value, self.user)
 

@@ -206,6 +206,24 @@ class RBBLFile:
                         ('value', False), ('date', self.now()), ('active', True))
         return uid
 
+    @commit_group
+    def create_unit_with_features(self, unittype: str, feats, user, parent=None) -> int:
+        uid = self.create_unit(unittype, user)
+        for tier, feat, val in feats:
+            fid, typ = self.get_feature(unittype, tier, feat, error=True)
+            self.check_type(typ, val)
+            self.insert(f'{typ}_features', ('unit', uid), ('feature', fid),
+                        ('value', val), ('user', user), ('confidence', 1),
+                        ('date', self.now()), ('active', True))
+        if parent:
+            ptyp = self.get_unit_type(parent)
+            self.modify_unit(parent)
+            self.insert('relations', ('parent', parent), ('parent_type', ptyp),
+                        ('child', uid), ('child_type', unittype),
+                        ('isprimary', True), ('active', True),
+                        ('date', self.now()))
+        return uid
+
     def get_unit_type(self, unitid: int) -> str:
         ret = self.first('SELECT type FROM units WHERE id = ?', unitid)
         if ret is None:

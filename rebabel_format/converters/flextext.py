@@ -20,9 +20,9 @@ class FlextextReader(XMLReader):
     def iter_nodes(self, node, parent=None, idx=0):
         known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
         if node.tag in known:
-            uid = self.create_unit(node.tag, parent=parent)
             self.ensure_feature(node.tag, 'meta', 'index', 'int')
-            self.set_feature(uid, 'meta', 'index', idx)
+            children = []
+            feats = [('meta', 'index', idx)]
             i = 1
             for ch in node:
                 if ch.tag == 'item':
@@ -30,13 +30,18 @@ class FlextextReader(XMLReader):
                     feat = ch.attrib.get('type', 'None')
                     val = ch.text or ''
                     self.ensure_feature(node.tag, tier, feat, 'str')
-                    self.set_feature(uid, tier, feat, val)
+                    feats.append((tier, feat, val))
                 else:
-                    self.iter_nodes(ch, parent=uid, idx=i)
+                    children.append((ch, i))
                     i += 1
+            uid = self.create_unit_with_features(node.tag, feats, parent=parent)
+            for ch, i in children:
+                self.iter_nodes(ch, parent=uid, idx=i)
         else:
             for ch in node:
                 self.iter_nodes(ch, parent=parent, idx=idx)
+                if node.tag == 'document':
+                    idx += 1
 
 class FlextextWriter(Writer):
     identifier = 'flextext'
