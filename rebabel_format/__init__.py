@@ -5,6 +5,7 @@ def main():
     from . import db
     from . import query
     from . import transform
+    from . import concordance
     from . import converters
     from .converters.reader import read_new, ALL_DESCRIPTIONS
     from .converters.writer import write
@@ -13,7 +14,7 @@ def main():
     from collections import defaultdict
     parser = argparse.ArgumentParser(
         description='Process reBabel annotation files')
-    parser.add_argument('action', choices=['import', 'inspect', 'export', 'query', 'transform'])
+    parser.add_argument('action', choices=['import', 'inspect', 'export', 'query', 'transform', 'concordance'])
     parser.add_argument('config', action='store', help='TOML configuration file')
 
     args = parser.parse_args()
@@ -45,3 +46,5 @@ def main():
         query.search_conf(conf)
     elif args.action == 'transform':
         transform.transform_conf(conf)
+    elif args.action == 'concordance':
+        concordance.concordance_conf(conf)

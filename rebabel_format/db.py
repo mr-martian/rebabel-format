@@ -303,6 +303,12 @@ class RBBLFile:
                     ('isprimary', primary), ('active', True),
                     ('date', self.now()))
 
+    def get_parent(self, uid: int):
+        ret = self.first('SELECT parent FROM relations WHERE child = ? AND isprimary = ? AND active = ?', uid, True, True)
+        if ret:
+            ret = ret[0]
+        return ret
+
     def get_all_features(self):
         self.cur.execute('SELECT * FROM tiers')
         return self.cur.fetchall()
@@ -339,3 +345,15 @@ class RBBLFile:
         if ret is not None:
             ret = ret[0]
         return ret
+
+    def get_feature_values(self, units, featid, feattype: str):
+        if feattype not in ['bool', 'int', 'str', 'ref']:
+            raise ValueError(f'Unknown value type {feattype}.')
+        plc = ', '.join(['?']*len(units))
+        self.cur.execute(f'SELECT unit, value FROM {feattype}_features WHERE unit IN ({plc}) AND active = ? AND feature = ? AND user IS NOT NULL',
+                         units + [True, featid])
+        ret = self.cur.fetchall()
+        if not ret:
+            return {}
+        else:
+            return dict(ret)
