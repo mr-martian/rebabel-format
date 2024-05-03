@@ -23,7 +23,6 @@ class FlextextReader(XMLReader):
             self.ensure_feature(node.tag, 'meta', 'index', 'int')
             children = []
             feats = [('meta', 'index', idx)]
-            i = 1
             for ch in node:
                 if ch.tag == 'item':
                     tier = 'FlexText/'+ch.attrib.get('lang', 'None')
@@ -32,16 +31,13 @@ class FlextextReader(XMLReader):
                     self.ensure_feature(node.tag, tier, feat, 'str')
                     feats.append((tier, feat, val))
                 else:
-                    children.append((ch, i))
-                    i += 1
+                    children.append(ch)
             uid = self.create_unit_with_features(node.tag, feats, parent=parent)
-            for ch, i in children:
+            for i, ch in enumerate(children, 1):
                 self.iter_nodes(ch, parent=uid, idx=i)
         else:
-            for ch in node:
-                self.iter_nodes(ch, parent=parent, idx=idx)
-                if node.tag == 'document':
-                    idx += 1
+            for i, ch in enumerate(node, 1):
+                self.iter_nodes(ch, parent=parent, idx=i)
 
 class FlextextWriter(Writer):
     identifier = 'flextext'
