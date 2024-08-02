@@ -24,64 +24,44 @@ CREATE TABLE tiers(
              valuetype = 'str' OR valuetype = 'ref')
 );
 
-CREATE TABLE int_features(
-       id INTEGER PRIMARY KEY,
+CREATE TABLE features(
        unit INTEGER,
        feature INTEGER,
        value INTEGER,
        user TEXT,
        confidence INTEGER,
        date datetime DEFAULT (datetime('now')),
-       probability REAL,
-       active bool DEFAULT 1,
-       FOREIGN KEY(unit) REFERENCES units(id),
-       FOREIGN KEY(feature) REFERENCES tiers(id)
-);
-
-CREATE TABLE bool_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,
-       feature INTEGER,
-       value bool,
-       user TEXT,
-       confidence INTEGER,
-       date datetime DEFAULT (datetime('now')),
-       probability REAL,
-       active bool DEFAULT 1,
-       FOREIGN KEY(unit) REFERENCES units(id),
-       FOREIGN KEY(feature) REFERENCES tiers(id)
-);
-
-CREATE TABLE str_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,
-       feature INTEGER,
-       value TEXT,
-       user TEXT,
-       confidence INTEGER,
-       date datetime DEFAULT (datetime('now')),
-       probability REAL,
-       active bool DEFAULT 1,
-       FOREIGN KEY(unit) REFERENCES units(id),
-       FOREIGN KEY(feature) REFERENCES tiers(id)
-);
-
--- `relations` is for parent-child connections,
--- `ref_features` is for all other types of references
-CREATE TABLE ref_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,
-       feature INTEGER,
-       value INTEGER,
-       user TEXT,
-       confidence INTEGER,
-       date datetime DEFAULT (datetime('now')),
-       probability REAL,
-       active bool DEFAULT 1,
        FOREIGN KEY(unit) REFERENCES units(id),
        FOREIGN KEY(feature) REFERENCES tiers(id),
-       FOREIGN KEY(value) REFERENCES units(id)
+       UNIQUE(unit, feature)
 );
+CREATE TABLE suggestions(
+       unit INTEGER,
+       feature INTEGER,
+       value INTEGER,
+       date datetime DEFAULT (datetime('now')),
+       probability REAL,
+       FOREIGN KEY(unit) REFERENCES units(id),
+       FOREIGN KEY(feature) REFERENCES tiers(id)
+);
+CREATE TABLE history(
+       unit INTEGER,
+       feature INTEGER,
+       value INTEGER,
+       user TEXT,
+       confidence INTEGER,
+       start datetime DEFAULT (datetime('now')),
+       end datetime DEFAULT (datetime('now')),
+       FOREIGN KEY(unit) REFERENCES units(id),
+       FOREIGN KEY(feature) REFERENCES tiers(id)
+);
+CREATE TRIGGER edit BEFORE UPDATE ON features
+       BEGIN
+        INSERT INTO history VALUES
+               (OLD.unit, OLD.feature, OLD.value, OLD.user, OLD.confidence,
+               OLD.date, NEW.date);
+        UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
+       END;
 
 -- types are redundant with units table, but it might simplify some
 -- queries to duplicate that information (and it's not too much)
@@ -110,37 +90,5 @@ CREATE TABLE conflicts(
        value2 INTEGER, -- ref
        value2_type TEXT
 );
-
-CREATE TRIGGER new_int_feature BEFORE INSERT ON int_features
-       BEGIN
-        UPDATE int_features SET active = 0
-               WHERE unit = NEW.unit AND feature = NEW.feature
-                     AND date != NEW.date;
-        UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
-       END;
-
-CREATE TRIGGER new_bool_feature BEFORE INSERT ON bool_features
-       BEGIN
-        UPDATE bool_features SET active = 0
-               WHERE unit = NEW.unit AND feature = NEW.feature
-                     AND date != NEW.date;
-        UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
-       END;
-
-CREATE TRIGGER new_str_feature BEFORE INSERT ON str_features
-       BEGIN
-        UPDATE str_features SET active = 0
-               WHERE unit = NEW.unit AND feature = NEW.feature
-                     AND date != NEW.date;
-        UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
-       END;
-
-CREATE TRIGGER new_ref_feature BEFORE INSERT ON ref_features
-       BEGIN
-        UPDATE ref_features SET active = 0
-               WHERE unit = NEW.unit AND feature = NEW.feature
-                     AND date != NEW.date;
-        UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
-       END;
 
 COMMIT;

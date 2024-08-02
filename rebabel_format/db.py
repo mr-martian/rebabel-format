@@ -4,6 +4,7 @@ import sqlite3 as sql
 import datetime
 import os.path
 import functools
+import itertools
 
 def load_schema():
     try:
@@ -66,11 +67,11 @@ class RBBLFile:
         self.current_time = dt
 
     @commit_group
-    def insert(self, table, *args):
+    def insert(self, table, *args, **kwargs):
         cols = []
         qs = []
         vals = []
-        for c, v in args:
+        for c, v in itertools.chain(args, kwargs.items()):
             cols.append(c)
             qs.append('?')
             vals.append(v)
@@ -113,12 +114,11 @@ class RBBLFile:
                     ('modified', self.now()), ('active', True))
         uid = self.cur.lastrowid
         if user:
-            self.insert('bool_features', ('unit', uid), ('feature', meta),
-                        ('value', True), ('date', self.now()), ('active', True),
-                        ('user', user))
+            self.insert('features', ('unit', uid), ('feature', meta),
+                        ('value', True), ('date', self.now()), ('user', user))
         else:
-            self.insert('bool_features', ('unit', uid), ('feature', meta),
-                        ('value', False), ('date', self.now()), ('active', True))
+            self.insert('features', ('unit', uid), ('feature', meta),
+                        ('value', False), ('date', self.now()))
         return uid
 
     @commit_group
@@ -127,7 +127,7 @@ class RBBLFile:
         for tier, feat, val in feats:
             fid, typ = self.get_feature(unittype, tier, feat, error=True)
             self.check_type(typ, val)
-            self.insert(f'{typ}_features', ('unit', uid), ('feature', fid),
+            self.insert('features', ('unit', uid), ('feature', fid),
                         ('value', val), ('user', user), ('confidence', 1),
                         ('date', self.now()), ('active', True))
         if parent:
@@ -158,9 +158,16 @@ class RBBLFile:
         unittype = self.get_unit_type(unitid)
         fid, typ = self.get_feature(unittype, tier, feature, error=True)
         self.check_type(typ, value)
-        self.insert('%s_features' % typ, ('unit', unitid), ('feature', fid),
-                    ('value', value), ('user', user), ('confidence', confidence),
-                    ('date', self.now()), ('active', True))
+        params = {'unit': unitid, 'feature': fid, 'value': value,
+                  'user': user, 'confidence': confidence, 'date': self.now()}
+        self.cur.execute(
+            'UPDATE features SET value = :value, user = :user, confidence = :confidence, date = :date WHERE unit = :unit AND feature = :feature',
+            params,
+        )
+        self.cur.execute(
+            'INSERT OR IGNORE INTO features(unit, feature, value, user, confidence, date) VALUES(:unit, :feature, :value, :user, :confidence, :date)',
+            params,
+        )
 
     @commit_group
     def set_feature_dist(self, unitid: int, tier: str, feature: str,
@@ -175,13 +182,12 @@ class RBBLFile:
             if p <= 0:
                 raise ValueError('Probabilities must be positive.')
             total += p
-        tab = '%s_features' % typ
         if not normalize:
             total = 1
         for v, p in values:
-            self.insert(tab, ('unit', unitid), ('feature', fid), ('value', v),
-                        ('date', self.now()), ('probability', p/total),
-                        ('active', True))
+            self.insert('suggestions', ('unit', unitid), ('feature', fid),
+                        ('value', v), ('date', self.now()),
+                        ('probability', p/total), ('active', True))
 
     @commit_group
     def rem_parent(self, parent: int, child: int, primary_only=False):
@@ -228,20 +234,16 @@ class RBBLFile:
 
     def get_unit_features(self, unitid: int, features):
         plc = ', '.join(['?']*len(features))
-        ret = {}
-        for typ in ['bool', 'int', 'str', 'ref']:
-            self.cur.execute(
-                f'SELECT feature, value FROM {typ}_features WHERE unit = ? AND active = ? AND feature IN ({plc}) AND user IS NOT NULL',
-                [unitid, True] + features,
-            )
-            for f, v in self.cur.fetchall():
-                ret[f] = v
-        return ret
+        self.cur.execute(
+            'SELECT feature, value FROM features WHERE unit = ? AND feature IN ({plc})',
+            [unitid] + features,
+        )
+        return dict(self.cur.fetchall())
 
     def get_feature_value(self, unitid: int, featid: int, feattype: str):
         if feattype not in ['bool', 'int', 'str', 'ref']:
             raise ValueError(f'Unknown value type {feattype}.')
-        ret = self.first(f'SELECT value FROM {feattype}_features WHERE unit = ? AND active = ? AND feature = ? AND user IS NOT NULL', unitid, True, featid)
+        ret = self.first('SELECT value FROM features WHERE unit = ? AND feature = ?', unitid, featid)
         if ret is not None:
             ret = ret[0]
         return ret
@@ -250,8 +252,8 @@ class RBBLFile:
         if feattype not in ['bool', 'int', 'str', 'ref']:
             raise ValueError(f'Unknown value type {feattype}.')
         plc = ', '.join(['?']*len(units))
-        self.cur.execute(f'SELECT unit, value FROM {feattype}_features WHERE unit IN ({plc}) AND active = ? AND feature = ? AND user IS NOT NULL',
-                         units + [True, featid])
+        self.cur.execute('SELECT unit, value FROM features WHERE unit IN ({plc}) AND feature = ?',
+                         units + [featid])
         ret = self.cur.fetchall()
         if not ret:
             return {}
