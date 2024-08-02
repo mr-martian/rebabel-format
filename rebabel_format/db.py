@@ -5,104 +5,18 @@ import datetime
 import os.path
 import functools
 
+def load_schema():
+    try:
+        from importlib.resources import files
+    except ImportError:
+        from importlib_resources import files
+    return files().joinpath('schema.sql').read_text()
+
 sql.register_adapter(datetime.datetime, lambda d: d.isoformat())
 sql.register_converter('datetime', lambda b: datetime.datetime.fromisoformat(b.decode()))
 
 sql.register_adapter(bool, lambda bl: b'1' if bl else b'0')
 sql.register_converter('bool', lambda b: False if b == b'0' else True)
-
-NEW_DB_SCRIPT = '''
-BEGIN;
-CREATE TABLE metadata(schema_major INTEGER, schema_minor INTEGER);
-INSERT INTO metadata(schema_major, schema_minor) VALUES(1, 0);
-CREATE TABLE units(
-       id INTEGER PRIMARY KEY,
-       type TEXT,
-       created datetime,
-       modified datetime,
-       active bool
-);
-CREATE TABLE tiers(
-       id INTEGER PRIMARY KEY,
-       tier TEXT,
-       feature TEXT,
-       unittype TEXT,
-       valuetype TEXT -- "int", "bool", "str", "ref"
-);
-CREATE TABLE int_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,    -- ref(units.id)
-       feature INTEGER, -- ref(tiers.id)
-       value INTEGER,
-       user TEXT,
-       confidence INTEGER,
-       date datetime,
-       probability REAL,
-       active bool
-);
-CREATE TABLE bool_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,    -- ref(units.id)
-       feature INTEGER, -- ref(tiers.id)
-       value bool,
-       user TEXT,
-       confidence INTEGER,
-       date datetime,
-       probability REAL,
-       active bool
-);
--- I wonder if there would be any benefit to having a separate table for
--- categorical features so that we could restrict the column size?
-CREATE TABLE str_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,    -- ref(units.id)
-       feature INTEGER, -- ref(tiers.id)
-       value TEXT,
-       user TEXT,
-       confidence INTEGER,
-       date datetime,
-       probability REAL,
-       active bool
-);
--- `relations` is for parent-child connections,
--- `ref_features` is for all other types of references
-CREATE TABLE ref_features(
-       id INTEGER PRIMARY KEY,
-       unit INTEGER,    -- ref(units.id)
-       feature INTEGER, -- ref(tiers.id)
-       value INTEGER,   -- ref(units.id)
-       user TEXT,
-       confidence INTEGER,
-       date datetime,
-       probability REAL,
-       active bool
-);
--- types are redundant with units table, but it might simplify some
--- queries to duplicate that information (and it's not too much)
--- `isprimary` indicates whether this is the link that the child
--- would return if their parent (singular) is requested.
-CREATE TABLE relations(
-       id INTEGER PRIMARY KEY,
-       parent INTEGER,    -- ref(units.id)
-       parent_type TEXT,
-       child INTEGER,     -- ref(units.id)
-       child_type TEXT,
-       isprimary bool,
-       active bool,
-       date datetime
-);
--- the type columns specify which tables the refence columns point into
--- "str", "bool", "int", and "ref" for `$1_features`
--- and "child" for `relations`
-CREATE TABLE conflicts(
-       id INTEGER PRIMARY KEY,
-       value1 INTEGER, -- ref
-       value1_type TEXT,
-       value2 INTEGER, -- ref
-       value2_type TEXT
-);
-COMMIT;
-'''
 
 class RBBLFile:
     def commit_group(fn):
@@ -124,7 +38,8 @@ class RBBLFile:
         if not os.path.exists(pth):
             if create:
                 self.con = sql.connect(pth, detect_types=sql.PARSE_DECLTYPES)
-                self.con.executescript(NEW_DB_SCRIPT)
+                schema = load_schema()
+                self.con.executescript(schema)
             else:
                 raise FileNotFoundError('Database file %s does not exist.' % pth)
         else:
@@ -217,7 +132,6 @@ class RBBLFile:
                         ('date', self.now()), ('active', True))
         if parent:
             ptyp = self.get_unit_type(parent)
-            self.modify_unit(parent)
             self.insert('relations', ('parent', parent), ('parent_type', ptyp),
                         ('child', uid), ('child_type', unittype),
                         ('isprimary', True), ('active', True),
@@ -229,14 +143,6 @@ class RBBLFile:
         if ret is None:
             raise ValueError('Unit %s does not exist.' % unitid)
         return ret[0]
-
-    @commit_group
-    def modify_unit(self, unitid: int):
-        self.cur.execute('UPDATE units SET modified = ? WHERE id = ?',
-                         (self.now(), unitid))
-
-    def _clear_feature(self, unitid, featid, feattype):
-        self.cur.execute('UPDATE %s_features SET active = ? WHERE unit = ? AND feature = ?' % feattype, (False, unitid, featid))
 
     def check_type(self, typename, value):
         if typename == 'str' and not isinstance(value, str):
@@ -252,8 +158,6 @@ class RBBLFile:
         unittype = self.get_unit_type(unitid)
         fid, typ = self.get_feature(unittype, tier, feature, error=True)
         self.check_type(typ, value)
-        self._clear_feature(unitid, fid, typ)
-        self.modify_unit(unitid)
         self.insert('%s_features' % typ, ('unit', unitid), ('feature', fid),
                     ('value', value), ('user', user), ('confidence', confidence),
                     ('date', self.now()), ('active', True))
@@ -271,7 +175,6 @@ class RBBLFile:
             if p <= 0:
                 raise ValueError('Probabilities must be positive.')
             total += p
-        self._clear_feature(unitid, fid, typ)
         tab = '%s_features' % typ
         if not normalize:
             total = 1
@@ -279,7 +182,6 @@ class RBBLFile:
             self.insert(tab, ('unit', unitid), ('feature', fid), ('value', v),
                         ('date', self.now()), ('probability', p/total),
                         ('active', True))
-        self.modify_unit(unitid)
 
     @commit_group
     def rem_parent(self, parent: int, child: int, primary_only=False):
@@ -296,8 +198,6 @@ class RBBLFile:
         ctyp = self.get_unit_type(child)
         if primary or clear:
             self.rem_parent(parent, child, primary_only=(not clear))
-        self.modify_unit(parent)
-        self.modify_unit(child)
         self.insert('relations', ('parent', parent), ('parent_type', ptyp),
                     ('child', child), ('child_type', ctyp),
                     ('isprimary', primary), ('active', True),
