@@ -8,14 +8,13 @@ import re
 
 class FeatureQuery:
     like_escape = re.compile('([%_$])')
-    def __init__(self, featid, table, value=None, operator=None):
+    def __init__(self, featid, value=None, operator=None):
         self.featid = featid
-        self.table = table
         self.value = value
         self.operator = operator
     def query(self, unitids=None):
-        ret = f'SELECT f.unit, f.value FROM {self.table} f WHERE f.active = ? AND f.user IS NOT NULL AND f.feature = ?'
-        params = [True, self.featid]
+        ret = f'SELECT f.unit, f.value FROM features f WHERE f.feature = ?'
+        params = [self.featid]
         if unitids is not None:
             if isinstance(unitids, list) and len(unitids) > 0:
                 q = ', '.join(['?']*len(unitids))
@@ -62,9 +61,9 @@ class UnitQuery:
         if len(v) > 1:
             raise ValueError(f'Cannot specify multiple value constrains on a single feature, found {v}.')
         if v:
-            fq = FeatureQuery(fid, ftyp+'_features', spec[v[0]], v[0])
+            fq = FeatureQuery(fid, spec[v[0]], v[0])
         else:
-            fq = FeatureQuery(fid, ftyp+'_features')
+            fq = FeatureQuery(fid)
         self.features.append(fq)
     def check(self, fq, ids):
         if not ids:
@@ -82,8 +81,16 @@ class UnitQuery:
             units = f.get_units(self.db, units)
             if units == []:
                 return []
-        qr = 'SELECT u.id FROM units u WHERE type = ? AND active = ?'
-        params = [self.unittype, True]
+        qr = 'SELECT u.id FROM units u WHERE type'
+        params = []
+        if isinstance(self.unittype, str):
+            qr += ' = ?'
+            params.append(self.unittype)
+        elif isinstance(self.unittype, list):
+            qr += ' IN (' + ', '.join(['?']*len(self.unittype)) + ')'
+            params += self.unittype
+        else:
+            raise ValueError(f"Invalid unit type specifier '{self.unittype}'.")
         if units:
             plc = ', '.join(['?']*len(units))
             qr += f' AND id IN ({plc})'
@@ -225,35 +232,3 @@ def search(db, query):
             for i in sorted(u):
                 yield from combine(cur + [i])
     yield from combine([])
-
-def search_conf(conf):
-    from .config import get_single_param
-    if 'query' not in conf:
-        raise ValueError('Missing query')
-    db = RBBLFile(get_single_param(conf, 'query', 'db'))
-    print_feats = {}
-    lab_width = 0
-    for name in conf['query']:
-        if not isinstance(conf['query'][name], dict):
-            continue
-        pr = conf['query'][name].get('print', [])
-        typ = conf['query'][name].get('type')
-        if not isinstance(pr, list):
-            pr = [pr]
-        if typ is None:
-            continue
-        print_feats[name] = []
-        for p in pr:
-            t, f = parse_feature(p)
-            i, vtyp = db.get_feature(typ, t, f, error=True)
-            lab = t+':'+f
-            lab_width = max(lab_width, len(lab))
-            print_feats[name].append((lab, i, vtyp))
-    for n, result in enumerate(search(db, conf['query']), 1):
-        print('Result', n)
-        for name, uid in sorted(result.items()):
-            print(name, uid)
-            for lab, fid, ftyp in print_feats.get(name, []):
-                v = str(db.get_feature_value(uid, fid, ftyp))
-                print('\t'+lab.ljust(lab_width+3)+'\t'+v)
-        print('')

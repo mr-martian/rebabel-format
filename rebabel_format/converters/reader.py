@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from ..db import RBBLFile
+import logging
 
 ALL_READERS = {}
 ALL_DESCRIPTIONS = {}
@@ -71,6 +72,8 @@ class MetaReader(type):
         for a, v in attrs.items():
             if a in ['identifier', 'short_name', 'long_name']:
                 del new_attrs[a]
+        if ident:
+            new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
         ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
         if ident is not None:
             ALL_READERS[ident] = ret
@@ -84,6 +87,15 @@ class XMLReader(Reader):
     def open_file(self, pth):
         import xml.etree.ElementTree as ET
         return ET.parse(pth).getroot()
+
+    def close_file(self, fin):
+        self.commit()
+
+class JSONReader(Reader):
+    def open_file(self, pth):
+        import json
+        with open(pth) as fin:
+            return json.load(fin)
 
     def close_file(self, fin):
         pass

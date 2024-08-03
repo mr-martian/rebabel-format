@@ -235,27 +235,72 @@ class RBBLFile:
     def get_unit_features(self, unitid: int, features):
         plc = ', '.join(['?']*len(features))
         self.cur.execute(
-            'SELECT feature, value FROM features WHERE unit = ? AND feature IN ({plc})',
+            f'SELECT feature, value FROM features WHERE unit = ? AND feature IN ({plc})',
             [unitid] + features,
         )
         return dict(self.cur.fetchall())
 
-    def get_feature_value(self, unitid: int, featid: int, feattype: str):
-        if feattype not in ['bool', 'int', 'str', 'ref']:
-            raise ValueError(f'Unknown value type {feattype}.')
+    def get_feature_value(self, unitid: int, featid: int):
         ret = self.first('SELECT value FROM features WHERE unit = ? AND feature = ?', unitid, featid)
         if ret is not None:
             ret = ret[0]
         return ret
 
-    def get_feature_values(self, units, featid, feattype: str):
-        if feattype not in ['bool', 'int', 'str', 'ref']:
-            raise ValueError(f'Unknown value type {feattype}.')
+    def get_feature_values(self, units, featid):
         plc = ', '.join(['?']*len(units))
-        self.cur.execute('SELECT unit, value FROM features WHERE unit IN ({plc}) AND feature = ?',
+        self.cur.execute(f'SELECT unit, value FROM features WHERE unit IN ({plc}) AND feature = ?',
                          units + [featid])
         ret = self.cur.fetchall()
         if not ret:
             return {}
         else:
             return dict(ret)
+
+class Unit:
+    FeatureCache = {} # (tier, feature, type) => (id, valuetype)
+
+    def __init__(self, db, id):
+        self._db = db
+        self._id = id
+        self._type = self._db.get_unit_type(self._id)
+        self._features = {}
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def type(self):
+        return self._type
+
+    def _get_feature(self, key):
+        tier, feature, id, valuetype = None, None, None, None
+        if isinstance(key, tuple) and len(key) == 2:
+            tier, feature = key
+        elif isinstance(key, str) and ':' in key:
+            tier, feature = key.split(':', 1)
+        elif isinstance(key, int):
+            id = key
+        else:
+            raise ValueError(f"Invalid feature identifier '{key}'.")
+        if tier and feature:
+            cache_key = (tier, feature, self._type)
+            if cache_key in Unit.FeatureCache:
+                id, valuetype = Unit.FeatureCache[cache_key]
+            else:
+                id, valuetype = self._db.get_feature(self._type, tier, feature,
+                                                     error=True)
+                Unit.FeatureCache[cache_key] = (id, valuetype)
+        return id, valuetype
+
+    def __getitem__(self, key):
+        id, valuetype = self._get_feature(key)
+        if id in self._features:
+            value = self._features[id]
+        else:
+            value = self._db.get_feature_value(self._id, id)
+            self._features[id] = value
+        if valuetype == 'ref':
+            return Unit(self._db, value)
+        else:
+            return value

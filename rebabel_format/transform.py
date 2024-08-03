@@ -14,17 +14,3 @@ def transform(db, trans, username='user', confidence=1):
                 db.set_feature(match[cmd['target']], cmd['tier'],
                                cmd['feature'], cmd['value'], user=username,
                                confidence=confidence)
-
-def transform_conf(conf):
-    from .config import get_single_param, get_user
-    if 'transform' not in conf:
-        raise ValueError('Missing transform')
-    db = RBBLFile(get_single_param(conf, 'transform', 'db'))
-    seq = get_single_param(conf, 'transform', 'sequence')
-    user = get_user(conf, 'transform')
-    confidence = get_single_param(conf, 'transform', 'confidence')
-    if confidence is None:
-        confidence = 1
-    for rule in seq:
-        transform(db, get_single_param(conf, 'transform', rule),
-                  username=user, confidence=confidence)

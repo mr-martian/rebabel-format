@@ -2,49 +2,32 @@
 
 def main():
     import argparse
-    from . import db
-    from . import query
-    from . import transform
-    from . import concordance
-    from . import converters
-    from .converters.reader import read_new, ALL_DESCRIPTIONS
-    from .converters.writer import write
+    from . import processes
+    from .processes.process import ALL_PROCESSES
     from . import config
-    import os
-    from collections import defaultdict
+    import logging
+
+    epilog = []
+    for name, proc in sorted(ALL_PROCESSES.items()):
+        epilog.append(proc.help_text())
+
     parser = argparse.ArgumentParser(
-        description='Process reBabel annotation files')
-    parser.add_argument('action', choices=['import', 'inspect', 'export', 'query', 'transform', 'concordance'])
+        description='Process reBabel annotation files',
+        epilog='Available Actions:\n\n' + '\n\n'.join(epilog),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('action', choices=sorted(ALL_PROCESSES.keys()),
+                        metavar='ACTION', help='Action to perform (see below)')
     parser.add_argument('config', action='store', help='TOML configuration file')
+    parser.add_argument('--log-level', '-l', action='store',
+                        default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        metavar='LEVEL')
 
     args = parser.parse_args()
     conf = config.read_config(args.config)
+    logging.basicConfig(level=args.log_level)
 
-    if args.action == 'import':
-        read_new(conf)
-    elif args.action == 'inspect':
-        f = db.RBBLFile(config.get_single_param(conf, 'inspect', 'db'))
-        if config.get_single_param(conf, 'inspect', 'schema'):
-            feats = f.get_all_features()
-            fd = defaultdict(lambda: defaultdict(list))
-            for fid, tier, name, utype, vtype in feats:
-                fd[utype][tier].append((name, vtype))
-            for utype, d1 in sorted(fd.items()):
-                print(utype)
-                for tier, d2 in sorted(d1.items()):
-                    if tier == 'meta' and len(d2) == 1:
-                        continue
-                    print('\t' + tier)
-                    for feat, vtype in sorted(d2):
-                        if tier == 'meta' and feat == 'active':
-                            continue
-                        print(f'\t\t{feat}: {vtype}')
-                print('')
-    elif args.action == 'export':
-        write(conf)
-    elif args.action == 'query':
-        query.search_conf(conf)
-    elif args.action == 'transform':
-        transform.transform_conf(conf)
-    elif args.action == 'concordance':
-        concordance.concordance_conf(conf)
+    import cProfile
+    with cProfile.Profile() as pr:
+        proc = ALL_PROCESSES[args.action](conf)
+        proc.run()
+        pr.dump_stats('/tmp/stats.prof')
