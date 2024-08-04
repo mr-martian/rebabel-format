@@ -2,6 +2,7 @@
 
 from ..db import RBBLFile
 import logging
+from collections import defaultdict
 
 ALL_READERS = {}
 ALL_DESCRIPTIONS = {}
@@ -11,6 +12,7 @@ class BaseReader:
         self.known_feats = {}
         self.db = db
         self.user = user
+        self.features = defaultdict(dict)
 
     def ensure_feature(self, unittype, tier, feature, valuetype):
         key = (unittype, tier, feature)
@@ -29,9 +31,10 @@ class BaseReader:
             return fid
 
     def create_unit(self, unittype, parent=None):
-        uid = self.db.create_unit(unittype)
-        if parent:
-            self.db.set_parent(parent, uid)
+        uid = self.db.create_unit_with_features(unittype, [], self.user,
+                                                parent=parent)
+        #if parent:
+        #    self.db.set_parent(parent, uid)
         return uid
 
     def create_unit_with_features(self, unittype, features, parent=None):
@@ -39,26 +42,49 @@ class BaseReader:
                                                  parent=parent)
 
     def set_feature(self, uid, tier, name, value):
-        self.db.set_feature(uid, tier, name, value, self.user)
+        self.db.set_feature_new(uid, tier, name, value, self.user)
+
+    def prepare_feature(self, uid, tier, name, value):
+        if (tier, name) in self.known_feats:
+            fid = self.known_feats[(tier, name)]
+        else:
+            unittype = self.db.get_unit_type(uid)
+            fid, typ = self.db.get_feature(unittype, tier, name, error=True)
+            self.known_feats[(tier, name)] = fid
+        self.features[uid][fid] = value
+
+    def commit_features(self):
+        args = []
+        for uid, dct in self.features.items():
+            for fid, value in dct.items():
+                args.append({'unit': uid, 'feature': fid, 'value': value,
+                             'user': self.user, 'confidence': 1,
+                             'date': self.db.now()})
+        self.db.cur.executemany(
+            'INSERT INTO features(unit, feature, value, user, confidence, date) VALUES(:unit, :feature, :value, :user, :confidence, :date)',
+            args,
+        )
+        self.features = defaultdict(dict)
 
     def read_file(self, fin):
         pass
 
     def open_file(self, pth):
-        self.db.committing = False
-        if self.db.current_time is None:
-            self.db.current_time = self.db.now()
         return open(pth)
 
     def close_file(self, fin):
         fin.close()
-        self.db.committing = True
-        self.db.commit()
 
     def commit(self):
         self.db.committing = True
         self.db.commit()
         self.db.committing = False
+
+    def read(self, pth):
+        with self.db.transaction():
+            fin = self.open_file(pth)
+            self.read_file(fin)
+            self.close_file(fin)
 
 class MetaReader(type):
     def __new__(cls, name, bases, attrs):
@@ -89,7 +115,7 @@ class XMLReader(Reader):
         return ET.parse(pth).getroot()
 
     def close_file(self, fin):
-        self.commit()
+        pass
 
 class JSONReader(Reader):
     def open_file(self, pth):
@@ -99,18 +125,3 @@ class JSONReader(Reader):
 
     def close_file(self, fin):
         pass
-
-def read_new(conf):
-    from ..config import get_param, get_single_param, get_user
-    mode = get_single_param(conf, 'import', 'mode')
-    if mode not in ALL_READERS:
-        raise ValueError(f'Unknown reader {mode}.')
-    out_path = get_single_param(conf, 'import', 'db')
-    db = RBBLFile(out_path)
-    username = get_user(conf, 'import')
-    r = ALL_READERS[mode](db, username)
-    in_pths = get_single_param(conf, 'import', 'infiles')
-    for pth in in_pths:
-        fin = r.open_file(pth)
-        r.read_file(fin)
-        r.close_file(fin)

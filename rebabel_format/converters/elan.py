@@ -42,6 +42,7 @@ class EAFReader(XMLReader):
                 else:
                     next_todo.append(t)
             todo = next_todo
+        self.commit_features()
         self.db.committing = True
         self.db.current_time = None
         self.db.commit()
@@ -82,11 +83,11 @@ class EAFReader(XMLReader):
                             i = self.create_unit(tier_name, uid)
                             if index:
                                 index_val[uid] += 1
-                                self.set_feature(i, 'alignment', 'index',
-                                                 index_val[uid])
+                                self.prepare_feature(i, 'alignment', 'index',
+                                                     index_val[uid])
                             uid, typ = i, tier_name
                         self.ensure_feature(typ, 'ELAN', tier_name, 'str')
-                        self.set_feature(uid, 'ELAN', tier_name, t)
+                        self.prepare_feature(uid, 'ELAN', tier_name, t)
                     self.units[xmlid] = (uid, typ)
                 elif ann.tag == 'ALIGNABLE_ANNOTATION':
                     t = self.annotation_text(ann)
@@ -102,9 +103,9 @@ class EAFReader(XMLReader):
                                 parent = self.units[ann_id][0]
                                 break
                     uid = self.create_unit(tier_name, parent)
-                    self.set_feature(uid, 'alignment', 'starttime', s)
-                    self.set_feature(uid, 'alignment', 'endtime', s)
+                    self.prepare_feature(uid, 'alignment', 'starttime', s)
+                    self.prepare_feature(uid, 'alignment', 'endtime', e)
                     self.units[i] = (uid, tier_name)
                     if t is not None:
                         self.ensure_feature(tier_name, 'ELAN', tier_name, 'str')
-                        self.set_feature(uid, 'ELAN', tier_name, t)
+                        self.prepare_feature(uid, 'ELAN', tier_name, t)

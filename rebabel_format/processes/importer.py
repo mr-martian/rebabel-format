@@ -18,7 +18,5 @@ class Importer(Process):
         import time
         for pth in self.infiles:
             start = time.time()
-            fin = reader.open_file(pth)
-            reader.read_file(fin)
-            reader.close_file(fin)
+            reader.read(pth)
             self.logger.info(f"Read '{pth}' in {time.time()-start} seconds.")

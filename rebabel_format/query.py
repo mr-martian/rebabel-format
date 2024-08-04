@@ -214,8 +214,8 @@ def search(db, query):
         q2 = ', '.join(['?']*len(units[B]))
         fid, ftyp = db.get_feature(typ, 'meta', 'index', error=True)
         db.cur.execute(
-            f'SELECT A.unit, B.unit FROM int_features A, int_features B WHERE A.value + 1 = B.value AND A.feature = ? AND B.feature = ? AND A.active = ? AND B.active = ? AND A.unit IN ({q1}) AND B.unit IN ({q2})',
-            [fid, fid, True, True] + units[A] + units[B],
+            f'SELECT A.unit, B.unit FROM features A, features B WHERE A.value + 1 = B.value AND A.feature = ? AND B.feature = ? AND A.unit IN ({q1}) AND B.unit IN ({q2})',
+            [fid, fid] + units[A] + units[B],
         )
         pairs = set(db.cur.fetchall())
         if not pairs:
