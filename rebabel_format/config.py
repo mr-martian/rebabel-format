@@ -33,6 +33,8 @@ def parse_feature(obj):
         return obj.split(':')
     elif isinstance(obj, dict) and 'tier' in obj and 'feature' in obj:
         return obj['tier'], obj['feature']
+    elif isinstance(obj, list) and len(obj) == 2:
+        return obj[0], obj[1]
     else:
         raise ValueError(f'Invalid feature specifier {obj}.')
 

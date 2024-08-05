@@ -1,27 +1,18 @@
 #!/usr/bin/env python3
 
-from .process import SearchProcess
-from .parameters import Parameter, FeatureParameter
-from collections import Counter, defaultdict
+from .process import Process
+from .parameters import Parameter, FeatureParameter, QueryParameter
+from ..query import ResultTable
+from collections import Counter
 
-class Distribution(SearchProcess):
+class Distribution(Process):
     name = 'distribution'
+    query = QueryParameter()
     center = Parameter(default='Center')
     child_type = Parameter(type=str)
     child_print = Parameter(type=list)
     sort = FeatureParameter(default='meta:index')
     include = Parameter(default=[], type=list)
-
-    def pre_search(self):
-        self.counter = Counter()
-        child_features = set()
-        for block in self.child_print:
-            block['fid'] = self.get_feature(self.child_type, block['feature'])[0]
-            child_features.add(block['fid'])
-        self.sort_feature = self.db.get_feature(self.child_type, *self.sort)[0]
-        child_features.add(self.sort_feature)
-        self.child_features = list(child_features)
-        self.parents = defaultdict(list)
 
     def display_unit(self, features):
         pieces = []
@@ -34,22 +25,27 @@ class Distribution(SearchProcess):
             pieces.append(str(val))
         return '/'.join(pieces)
 
-    def per_result(self, result):
-        lab = [str(self.get_value(result, i)) for i in self.include]
-        self.parents[result[self.center]].append(lab)
-
-    def post_search(self):
-        dct = self.db.get_children(list(self.parents.keys()), self.child_type)
-        for parent, labs in self.parents.items():
-            children = [self.display_unit(f) for f in
-                        sorted(
-                            [self.db.get_unit_features(c, self.child_features)
-                             for c in dct[parent]],
-                            key=lambda f: f.get(self.sort_feature, 0),
-                        )]
-            for lab in labs:
-                self.counter['\t'.join(lab + children)] += 1
+    def run(self):
+        rt = ResultTable(self.db, self.query)
+        chname = rt.add_children(self.center, self.child_type)
+        printids = rt.add_features(chname,
+                                   [cp['feature'] for cp in self.child_print])
+        for p, i in zip(self.child_print, printids):
+            p['fid'] = i
+        sortid = rt.add_features(chname, [self.sort])[0]
+        for inc in self.include:
+            inc['fid'] = rt.add_features(inc['unit'], [inc])[0]
+        count = Counter()
+        for nodes, features in rt.results():
+            children = sorted(nodes[chname],
+                              key=lambda c: features[c].get(sortid, 0))
+            line = []
+            for dct in self.include:
+                line.append(str(features[nodes[dct['unit']]].get(dct['fid'])))
+            for ch in children:
+                line.append(self.display_unit(features[ch]))
+            count['\t'.join(line)] += 1
         cols = ['Count'] + [x['feature'] for x in self.include] + ['Items']
         print('\t'.join(cols))
-        for pattern, count in self.counter.most_common():
+        for pattern, count in count.most_common():
             print(f'{count}\t{pattern}')

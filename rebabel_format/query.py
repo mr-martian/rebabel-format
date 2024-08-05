@@ -232,3 +232,90 @@ def search(db, query):
             for i in sorted(u):
                 yield from combine(cur + [i])
     yield from combine([])
+
+class ResultTable:
+    def __init__(self, db, query):
+        self.db = db
+        self.nodes = list(search(db, query))
+        self.features = [{v: {} for v in r.values()} for r in self.nodes]
+        self.types = {k: v['type'] for k, v in query.items()
+                      if isinstance(v, dict)}
+        self.unit2results = defaultdict(list)
+        for i, result in enumerate(self.nodes):
+            for uid in result.values():
+                self.unit2results[uid].append(i)
+
+    def _node_ids(self, name: str):
+        for result in self.nodes:
+            ret = result[name]
+            if isinstance(ret, int):
+                yield ret
+            else:
+                yield from ret
+
+    def _right_node(self, result_id, node_name, node_id):
+        val = self.nodes[result_id][node_name]
+        if isinstance(val, int) and val == node_id:
+            return True
+        elif isinstance(val, list) and node_id in val:
+            return True
+        return False
+
+    def add_features(self, node: str, features: list):
+        types = self.types[node]
+        feats = []
+        for f in features:
+            if isinstance(f, int):
+                feats.append(f)
+            else:
+                tier, feature = parse_feature(f)
+                args = [tier, feature]
+                if isinstance(types, str):
+                    args.append(types)
+                    ut = '= ?'
+                else:
+                    args += types
+                    ut = 'IN (' + ', '.join(['?']*len(types)) + ')'
+                f = self.db.first(
+                    f'SELECT id FROM tiers WHERE tier = ? AND feature = ? AND unittype {ut}',
+                    *args,
+                )
+                if f is None:
+                    raise ValueError(f'Feature {tier}:{feature} does not exist for unit type {types}.')
+                feats.append(f[0])
+        units = list(set(self._node_ids(node)))
+        uplc = ', '.join(['?']*len(units))
+        fplc = ', '.join(['?']*len(feats))
+        self.db.cur.execute(
+            f'SELECT unit, feature, value FROM features WHERE unit in ({uplc}) AND feature IN ({fplc})',
+            units + feats,
+        )
+        for u, f, v in self.db.cur.fetchall():
+            for rid in self.unit2results[u]:
+                if self._right_node(rid, node, u):
+                    self.features[rid][u][f] = v
+        return feats
+
+    def add_children(self, node, child_type):
+        if not self.nodes:
+            return
+        units = list(set(self._node_ids(node)))
+        children = self.db.get_children(units, child_type)
+        name = node + '_children'
+        while name in self.nodes[0]:
+            name += '*'
+        for i, result in enumerate(self.nodes):
+            result[name] = []
+            ls = result[node]
+            if isinstance(ls, int):
+                ls = [ls]
+            for p in ls:
+                result[name] += children[p]
+            for c in result[name]:
+                self.features[i].setdefault(c, {})
+                self.unit2results[c].append(i)
+        self.types[name] = child_type
+        return name
+
+    def results(self):
+        yield from zip(self.nodes, self.features)
