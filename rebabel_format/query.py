@@ -262,6 +262,8 @@ class ResultTable:
         return False
 
     def add_features(self, node: str, features: list):
+        if node is None:
+            return [None] * len(features)
         types = self.types[node]
         feats = []
         for f in features:

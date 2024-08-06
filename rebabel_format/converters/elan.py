@@ -9,9 +9,7 @@ class EAFReader(XMLReader):
     long_name = 'ELAN annotation file'
 
     def read_file(self, root):
-        self.db.committing = False
-        self.db.current_time = self.db.now()
-        self.units = {} # ELAN ID -> (DB ID, type)
+        self.names = {}
         self.times = {}
         self.time_ranges = {} # tier ID -> (start, end) -> annotation id
         tiers = {} # tier ID -> XML node
@@ -42,10 +40,7 @@ class EAFReader(XMLReader):
                 else:
                     next_todo.append(t)
             todo = next_todo
-        self.commit_features()
-        self.db.committing = True
-        self.db.current_time = None
-        self.db.commit()
+        self.finish_block()
 
     def annotation_text(self, node):
         for ch in node:
@@ -54,20 +49,10 @@ class EAFReader(XMLReader):
         return None
 
     def process_tier(self, tier_name, tier, parent_relation):
-        units = True
-        index = False
+        units = (parent_relation != 'Symbolic_Association')
+        index = (parent_relation == 'Symbolic_Subdivision')
         self.time_ranges[tier_name] = {}
         parent_tier = tier.attrib.get('PARENT_REF')
-        if parent_relation == 'Symbolic_Association':
-            units = False
-        if parent_relation in [None, 'Time_Subdivision', 'Included_In']:
-            self.ensure_feature(tier_name, 'alignment', 'starttime', 'int')
-            self.ensure_feature(tier_name, 'alignment', 'endtime', 'int')
-        elif parent_relation == 'Symbolic_Subdivision':
-            self.ensure_feature(tier_name, 'alignment', 'index', 'int')
-            index = True
-        if units:
-            self.db.ensure_type(tier_name)
         index_val = Counter()
         for ann_container in tier:
             if ann_container.tag != 'ANNOTATION':
@@ -77,35 +62,34 @@ class EAFReader(XMLReader):
                     t = self.annotation_text(ann)
                     p = ann.attrib.get('ANNOTATION_REF')
                     xmlid = ann.attrib.get('ANNOTATION_ID')
-                    uid, typ = self.units[p]
+                    name = self.names[p]
                     if t is not None:
                         if units:
-                            i = self.create_unit(tier_name, uid)
+                            self.set_type(xmlid, tier_name)
+                            self.set_parent(xmlid, name)
                             if index:
-                                index_val[uid] += 1
-                                self.prepare_feature(i, 'alignment', 'index',
-                                                     index_val[uid])
-                            uid, typ = i, tier_name
-                        self.ensure_feature(typ, 'ELAN', tier_name, 'str')
-                        self.prepare_feature(uid, 'ELAN', tier_name, t)
-                    self.units[xmlid] = (uid, typ)
+                                index_val[name] += 1
+                                self.set_feature(
+                                    xmlid, 'alignment', 'index', 'int',
+                                    index_val[name])
+                            name = xmlid
+                        self.set_feature(name, 'ELAN', tier_name, 'str', t)
+                    self.names[xmlid] = name
                 elif ann.tag == 'ALIGNABLE_ANNOTATION':
                     t = self.annotation_text(ann)
                     i = ann.attrib.get('ANNOTATION_ID')
                     s = self.times.get(ann.attrib.get('TIME_SLOT_REF1'), -1)
                     e = self.times.get(ann.attrib.get('TIME_SLOT_REF2'), -1)
                     self.time_ranges[tier_name][(s, e)] = i
-                    parent = None
                     if parent_relation in ['Time_Subdivision', 'Included_In']:
                         dct = self.time_ranges.get(parent_tier, {})
                         for (start, end), ann_id in dct.items():
                             if start <= s and e <= end:
-                                parent = self.units[ann_id][0]
+                                self.set_parent(i, self.names[ann_id])
                                 break
-                    uid = self.create_unit(tier_name, parent)
-                    self.prepare_feature(uid, 'alignment', 'starttime', s)
-                    self.prepare_feature(uid, 'alignment', 'endtime', e)
-                    self.units[i] = (uid, tier_name)
+                    self.names[i] = i
+                    self.set_type(i, tier_name)
+                    self.set_feature(i, 'alignment', 'starttime', 'int', s)
+                    self.set_feature(i, 'alignment', 'endtime', 'int', e)
                     if t is not None:
-                        self.ensure_feature(tier_name, 'ELAN', tier_name, 'str')
-                        self.prepare_feature(uid, 'ELAN', tier_name, t)
+                        self.set_feature(i, 'ELAN', tier_name, 'str', t)

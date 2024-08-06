@@ -10,31 +10,27 @@ class FlextextReader(XMLReader):
     long_name = 'SIL Fieldworks Language Explorer XML glossed text'
 
     def read_file(self, fin):
-        self.db.committing = False
-        self.db.current_time = self.db.now()
         self.iter_nodes(fin)
-        self.db.committing = True
-        self.db.current_time = None
-        self.db.commit()
+        self.finish_block()
 
     def iter_nodes(self, node, parent=None, idx=0):
         known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
         if node.tag in known:
-            self.ensure_feature(node.tag, 'meta', 'index', 'int')
-            children = []
-            feats = [('meta', 'index', idx)]
+            name = node.attrib.get('guid', (parent or '') + ' ' + str(idx))
+            self.set_type(name, node.tag)
+            if parent:
+                self.set_parent(name, parent)
+            self.set_feature(name, 'meta', 'index', 'int', idx)
+            chidx = 0
             for ch in node:
                 if ch.tag == 'item':
                     tier = 'FlexText/'+ch.attrib.get('lang', 'None')
                     feat = ch.attrib.get('type', 'None')
                     val = ch.text or ''
-                    self.ensure_feature(node.tag, tier, feat, 'str')
-                    feats.append((tier, feat, val))
+                    self.set_feature(name, tier, feat, 'str', val)
                 else:
-                    children.append(ch)
-            uid = self.create_unit_with_features(node.tag, feats, parent=parent)
-            for i, ch in enumerate(children, 1):
-                self.iter_nodes(ch, parent=uid, idx=i)
+                    chidx += 1
+                    self.iter_nodes(ch, parent=name, idx=chidx)
         else:
             for i, ch in enumerate(node, 1):
                 self.iter_nodes(ch, parent=parent, idx=i)

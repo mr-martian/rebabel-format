@@ -1,89 +1,86 @@
 #!/usr/bin/env python3
 
-from .reader import Reader
+from .reader import LineReader, ReaderError
 from .writer import Writer
 
-# General TODO: this currently assumes valid input and crashes randomly on errors
-
-class ConnluReader(Reader):
+class ConnluReader(LineReader):
     identifier = 'conllu'
     short_name = 'CoNNL-U'
     long_name = 'Universal Dependencies CoNNL-U format'
 
-    def read_file(self, fin):
-        self.ensure_feature('word', 'UD', 'index', 'int')
-        self.ensure_feature('token', 'UD', 'index', 'int')
-        cur = []
-        for line in fin:
-            if not line.strip():
-                self.process_sentence(cur)
-                cur = []
-            else:
-                cur.append(line.rstrip())
-        if cur:
-            self.process_sentence(cur)
+    block_name = 'sentence'
 
-    def set_feats(self, wid: int, wtype: str, featstr: str, misc: bool):
-        if featstr == '_':
+    def reset(self):
+        self.word_idx = 0
+        self.token_idx = 0
+        self.edep_count = 0
+
+    def end(self):
+        if self.id_seq:
+            self.set_type('sentence', 'sentence')
+        super().end()
+
+    def process_line(self, line):
+        if not line:
             return
-        tier = 'UD/MISC' if misc else 'UD/FEATS'
-        for fs in featstr.split('|'):
-            name, val = fs.split('=', 1)
-            typ = 'str'
-            if misc and name == 'SpaceAfter':
-                typ = 'bool'
-                val = (val != 'No')
-            self.ensure_feature(wtype, tier, name, typ)
-            self.set_feature(wid, tier, name, val)
 
-    def process_sentence(self, lines):
-        sent_id = self.create_unit('sentence')
-        idx = 0
-        words = {}
-        for l in lines:
-            if l.startswith('#'):
-                key, val = l[1:].split('=', 1)
-                key = key.strip()
-                val = val.strip()
-                self.ensure_feature('sentence', 'UD', key, 'str')
-                self.set_feature(sent_id, 'UD', key, val)
-            else:
-                ls = l.split('\t')
-                typ = 'token' if '-' in ls[0] else 'word'
-                wid = self.create_unit(typ, parent=sent_id)
-                self.set_feature(wid, 'UD', 'index', idx)
-                idx += 1
-                if '.' in ls[0]:
-                    self.ensure_feature('word', 'UD', 'null', 'bool')
-                    self.set_feature(wid, 'UD', 'null', True)
-                self.set_feats(wid, typ, ls[5], False)
-                self.set_feats(wid, typ, ls[9], True)
-                cols = [('form', 1), ('lemma', 2), ('upos', 3), ('xpos', 4),
-                        ('deprel', 7)]
-                for n, i in cols:
-                    if ls[i] != '_':
-                        self.ensure_feature(typ, 'UD', n, 'str')
-                        self.set_feature(wid, 'UD', n, ls[i])
-                if typ == 'word':
-                    words[ls[0]] = (wid, ls[6], ls[8])
-        for wid, head, deps in words.values():
-            if head in words:
-                hid = words[head][0]
-                self.ensure_feature('word', 'UD', 'head', 'ref')
-                self.set_feature(wid, 'UD', 'head', hid)
-            if deps != '_':
-                for link in deps.split('|'):
-                    h, r = link.split(':', 1)
-                    if h in words:
-                        hid = words[head][0]
-                        lid = self.create_unit('UD-edep', parent=sent_id)
-                        self.ensure_feature('UD-edep', 'UD', 'parent', 'ref')
-                        self.ensure_feature('UD-edep', 'UD', 'child', 'ref')
-                        self.ensure_feature('UD-edep', 'UD', 'label', 'str')
-                        self.set_feature(lid, 'UD', 'parent', hid)
-                        self.set_feature(lid, 'UD', 'child', wid)
-                        self.set_feature(lid, 'UD', 'label', r)
-        self.commit()
+        if line[0] == '#':
+            if '=' in line:
+                k, v = line[1:].split('=', 1)
+                self.set_feature('sentence', 'UD', k.strip(), 'str', v.strip())
+            return
+
+        columns = line.strip().split('\t')
+        if len(columns) != 10:
+            self.error(f'Expected 10 columns, found {len(columns)}.')
+
+        name = columns[0]
+        is_token = '-' in name
+        self.set_type(name, 'token' if is_token else 'word')
+        if is_token:
+            self.token_idx += 1
+            self.set_feature(name, 'meta', 'index', 'int', self.token_idx)
+        else:
+            self.word_idx += 1
+            self.set_feature(name, 'meta', 'index', 'int', self.word_idx)
+            self.set_feature(name, 'UD', 'null', 'bool', '.' in name)
+
+        for group, val in [('UD/FEATS', columns[5]), ('UD/MISC', columns[9])]:
+            if val == '_':
+                continue
+            for pair in val.split('|'):
+                if '=' not in pair:
+                    self.error(f"Invalid key-value pair '{pair}'.")
+                k, v = pair.split('=', 1)
+                typ = 'str'
+                if k == 'SpaceAfter':
+                    typ = 'bool'
+                    v = (v != 'No')
+                self.set_feature(name, group, k, typ, v)
+
+        col_names = [('form', 1), ('lemma', 2), ('upos', 3), ('xpos', 4),
+                     ('head', 6), ('deprel', 7)]
+        for feat, col in col_names:
+            if columns[col] != '_':
+                typ = 'str'
+                if feat == 'head':
+                    if columns[col] == '0':
+                        continue
+                    typ = 'ref'
+                self.set_feature(name, 'UD', feat, typ, columns[col])
+
+        if columns[8] != '_':
+            for pair in columns[8].split('|'):
+                if ':' not in pair:
+                    self.error(f"Invalid dependency specifier '{pair}'.")
+                self.edep_count += 1
+                ename = f'\t{self.edep_count}'
+                self.set_type(ename, 'UD-edep')
+                self.set_parent(ename, 'sentence')
+                head, rel = pair.split(':', 1)
+                self.set_feature(ename, 'UD', 'parent', 'ref', h)
+                self.set_feature(ename, 'UD', 'child', 'ref', name)
+                self.set_feature(ename, 'UD', 'deprel', 'str', rel)
 
 class ConlluWriter(Writer):
     identifier = 'conllu'
