@@ -15,9 +15,12 @@ class BaseReader:
         self.db = db
         self.user = user
 
+        self.known_feats = {}
+        self.uids = {}
         self.all_ids = set()
         self.id_seq = []
         self.parents = {}
+        self.relations = defaultdict(set)
         self.types = {}
         self.features = defaultdict(dict) # (tier, feature, type) => value
 
@@ -62,6 +65,11 @@ class BaseReader:
         self._check_name(child_name)
         self.parents[child_name] = parent_name
 
+    def add_relation(self, child_name, parent_name):
+        self._check_name(parent_name)
+        self._check_name(child_name)
+        self.relations[child_name].add(parent_name)
+
     def set_feature(self, unit_name, tier, feature, ftype, value):
         self._check_name(unit_name)
         if ftype == 'ref':
@@ -70,13 +78,15 @@ class BaseReader:
             self.db.check_type(ftype, value)
         self.features[unit_name][(tier, feature, ftype)] = value
 
-    def finish_block(self, parent_if_missing=None):
+    def finish_block(self, parent_if_missing=None, keep_uids=False):
         parent_type_if_missing = None
         if parent_if_missing is not None:
             parent_type_if_missing = self.db.get_unit_type(parent_if_missing)
 
-        uids = {}
+        uids = self.uids.copy()
         for name in self.id_seq:
+            if name in uids:
+                continue
             if name not in self.types:
                 self.error(f"Unit '{name}' has not been assigned a type.")
             uids[name] = self.db.create_unit(self.types[name], user=self.user)
@@ -93,6 +103,14 @@ class BaseReader:
                  'child': uids[name], 'child_type': self.types[name],
                  'isprimary': True, 'active': True, 'date': self.db.now()}
             )
+            for rname in sorted(self.relations[name]):
+                rid = uids[rname]
+                rtype = self.types[rname]
+                parents.append(
+                    {'parent': rid, 'parent_type': rtype,
+                     'child': uids[name], 'child_type': self.types[name],
+                     'isprimary': False, 'active': True, 'date': self.db.now()}
+                )
         self.db.cur.executemany(
             'INSERT INTO relations(parent, parent_type, child, child_type, isprimary, active, date) VALUES(:parent, :parent_type, :child, :child_type, :isprimary, :active, :date)',
             parents,
@@ -121,9 +139,12 @@ class BaseReader:
         )
         self.features = defaultdict(dict)
 
-        self.all_ids = set()
         self.id_seq = []
-        self.types = {}
+        if keep_uids:
+            self.uids = uids
+        else:
+            self.all_ids = set()
+            self.types = {}
 
     def ensure_feature(self, unittype, tier, feature, valuetype):
         key = (unittype, tier, feature)
