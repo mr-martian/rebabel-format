@@ -30,7 +30,7 @@ def get_single_param(conf, action, key):
 
 def parse_feature(obj):
     if isinstance(obj, str) and obj.count(':') == 1:
-        return obj.split(':')
+        return tuple(obj.split(':'))
     elif isinstance(obj, dict) and 'tier' in obj and 'feature' in obj:
         return obj['tier'], obj['feature']
     elif isinstance(obj, list) and len(obj) == 2:

@@ -27,6 +27,9 @@ class BaseReader:
         self.filename = None
         self.location = None
 
+        self.type_map = {}
+        self.feature_map = {}
+
     def info(self, msg):
         try:
             self.logger.info(msg)
@@ -51,6 +54,36 @@ class BaseReader:
             pass
         raise ReaderError(send)
 
+    def set_mappings(self, mappings):
+        from ..config import parse_feature
+        delay = []
+        for i, mp in enumerate(mappings, 1):
+            infeat = mp.get('in_feature')
+            outfeat = mp.get('out_feature')
+            intier = mp.get('in_tier')
+            outtier = mp.get('out_tier')
+            intype = mp.get('in_type')
+            outtype = mp.get('out_type')
+            if infeat and outfeat:
+                if intier:
+                    f_in = (intier, infeat)
+                else:
+                    f_in = parse_feature(infeat)
+                if outtier:
+                    f_out = (outtier, outfeat)
+                else:
+                    f_out = parse_feature(outfeat)
+                if intype or not outtype:
+                    self.feature_map[(f_out, intype)] = f_in
+                else:
+                    delay.append((f_in, f_out, outtype))
+            elif intype and outtype:
+                self.type_map[outtype] = intype
+            else:
+                self.error(f'Unable to interpret mapping {i}.')
+        for f_in, f_out, outtype in delay:
+            self.feature_map[(f_out, self.type_map.get(outtype, outtype))] = f_in
+
     def _check_name(self, name):
         if name not in self.all_ids:
             self.all_ids.add(name)
@@ -58,7 +91,7 @@ class BaseReader:
 
     def set_type(self, unit_name, unit_type):
         self._check_name(unit_name)
-        self.types[unit_name] = unit_type
+        self.types[unit_name] = self.type_map.get(unit_type, unit_type)
 
     def set_parent(self, child_name, parent_name):
         self._check_name(parent_name)
@@ -122,6 +155,12 @@ class BaseReader:
         features = []
         for name in self.id_seq:
             for (tier, feature, ftype), value in self.features[name].items():
+                m_key = ((tier, feature), self.types[name])
+                n_key = ((tier, feature), None)
+                if m_key in self.feature_map:
+                    tier, feature = self.feature_map[m_key]
+                elif n_key in self.feature_map:
+                    tier, feature = self.feature_map[n_key]
                 key = (tier, feature, ftype, self.types[name])
                 if key in feature_ids:
                     fid = feature_ids[key]

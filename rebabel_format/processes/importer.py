@@ -8,7 +8,8 @@ class Importer(Process):
     mode = Parameter(type=str)
     username = UsernameParameter()
     infiles = Parameter(type=list)
-    glob = Parameter(type=bool, default=False)
+    glob = Parameter(type=bool, required=False)
+    mappings = Parameter(type=list, required=False)
 
     def run(self):
         from .. import converters
@@ -16,6 +17,8 @@ class Importer(Process):
         if self.mode not in ALL_READERS:
             raise ValueError(f'Unknown reader {self.mode}.')
         reader = ALL_READERS[self.mode](self.db, self.username)
+        if self.mappings:
+            reader.set_mappings(self.mappings)
         import time
         fnames = self.infiles
         if self.glob:
