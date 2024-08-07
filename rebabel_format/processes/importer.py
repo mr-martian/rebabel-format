@@ -8,6 +8,7 @@ class Importer(Process):
     mode = Parameter(type=str)
     username = UsernameParameter()
     infiles = Parameter(type=list)
+    glob = Parameter(type=bool, default=False)
 
     def run(self):
         from .. import converters
@@ -16,7 +17,14 @@ class Importer(Process):
             raise ValueError(f'Unknown reader {self.mode}.')
         reader = ALL_READERS[self.mode](self.db, self.username)
         import time
-        for pth in self.infiles:
+        fnames = self.infiles
+        if self.glob:
+            import glob
+            import itertools
+            fnames = itertools.chain.from_iterable(
+                map(lambda fname: sorted(glob.glob(fname)), self.infiles)
+            )
+        for pth in fnames:
             start = time.time()
             try:
                 reader.read(pth)

@@ -116,6 +116,7 @@ class BaseReader:
             parents,
         )
         self.parents = {}
+        self.relations = defaultdict(set)
 
         feature_ids = {}
         features = []
