@@ -37,6 +37,7 @@ class ConnluReader(LineReader):
         name = columns[0]
         is_token = '-' in name
         self.set_type(name, 'token' if is_token else 'word')
+        self.set_parent(name, 'sentence')
         if is_token:
             self.token_idx += 1
             self.set_feature(name, 'meta', 'index', 'int', self.token_idx)
