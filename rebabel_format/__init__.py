@@ -30,6 +30,14 @@ run `rebabel-format help [ACTION]` for a longer description.'''
     if args.action == 'help':
         if args.config in ALL_PROCESSES:
             print(ALL_PROCESSES[args.config].help_text())
+        elif args.config.startswith('import.'):
+            from . import converters
+            from .converters.reader import ALL_READERS
+            _, reader = args.config.split('.', 1)
+            if reader in ALL_READERS:
+                print(ALL_READERS[reader].help_text())
+            else:
+                print(f'Unknown import format {reader}.')
         else:
             print(f'Unknown process {args.config}.')
     else:

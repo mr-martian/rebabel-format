@@ -4,9 +4,41 @@ from .reader import LineReader, ReaderError
 from .writer import Writer
 
 class ConnluReader(LineReader):
+    '''
+    Units imported:
+
+    - sentence
+
+    Each sentence is imported as a top-level unit. Any comment lines which
+    contain `=` will be imported as string features in the `UD` tier.
+
+    - word, token
+
+    Each line of the sentence will be added as either a word node or a token
+    node. The parent will be set to the sentence and relations will be added
+    from any overt word to the containing token.
+
+    The non-empty single-valued columns will be imported in the `UD` tier with
+    the names `id`, `form`, `lemma`, `upos`, `xpos`, `head`, and `deprel`.
+    All of these are string features except `head`, which is a reference feature.
+    Words whose head is `0` will have `UD:head` unset.
+
+    The features and miscelaneous columns will be imported as string features
+    in the tiers `UD/FEATS` and `UD/MISC`, respectively.
+    An exception is made for `UD/MISC:SpaceAfter`, which is imported as a boolean
+    feature.
+
+    - UD-edep
+
+    Enhanced dependencies are imported as `UD-edep` nodes. Their parent is the
+    sentence and they have reference features `UD:parent` and `UD:child` and
+    a string feature `UD:deprel`.
+    '''
+
     identifier = 'conllu'
     short_name = 'CoNNL-U'
     long_name = 'Universal Dependencies CoNNL-U format'
+    format_specification = 'https://universaldependencies.org/format'
 
     block_name = 'sentence'
 
@@ -42,6 +74,10 @@ class ConnluReader(LineReader):
         if is_token:
             self.token_idx += 1
             self.set_feature(name, 'meta', 'index', 'int', self.token_idx)
+            a, b = name.split('-', 1)
+            if a.isdigit() and b.isdigit():
+                for ch in range(int(a), int(b)+1):
+                    self.add_relation(str(ch), name)
         else:
             self.word_idx += 1
             self.set_feature(name, 'meta', 'index', 'int', self.word_idx)

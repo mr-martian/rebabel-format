@@ -36,3 +36,42 @@ class Importer(Process):
                 self.logger.info(f"Read '{pth}' in {time.time()-start} seconds.")
             except ReaderError:
                 self.logger.error(f"Import of '{pth}' failed.")
+
+    @classmethod
+    def help_text_epilog(cls):
+        from .. import converters
+        from ..converters.reader import ALL_READERS, ReaderError
+        readers = '\n- '.join(sorted(ALL_READERS.keys()))
+        return f'''The following readers are available:
+- {readers}
+
+To view further information about one of them, you can run
+`rebabel-format help import.[reader]`
+e.g.
+`rebabel-format help import.conllu`
+
+This will include a description of what the unit types and feature
+names of the imported data will be.
+
+These names can be overridden with the `mappings` parameter such
+as the following:
+
+[[mappings]]
+in_tier = "morph"
+in_feature = "POS"
+out_tier = "UD"
+out_feature = "upos"
+
+This will cause any feature that would have been named `UD:upos`
+to instead be named `morph:POS`. A similar approach can be used
+to rename unit types:
+
+[[mappings]]
+in_type = "token"
+out_type = "word"
+
+This will cause item that would otherwise have been imported as
+a `word` to be imported as a `token`. If a mapping entry specifies
+both types and features, it will be interpreted as only renaming
+the feature in question when applied to that type.
+'''

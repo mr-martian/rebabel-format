@@ -4,9 +4,23 @@ from .reader import XMLReader
 from collections import Counter
 
 class EAFReader(XMLReader):
+    '''
+    Any tier which does not a Symbolic Association tier will be added as a unit
+    of the same name. Every tier will be imported as a string feature in the
+    tier `ELAN`.
+
+    If a tier is time-aligned, then the units imported from it will
+    have integer features `alignment:startime` and `alignment:endtime`,
+    which will be the start and end times in milliseconds.
+
+    If a tier is not time-aligned (i.e. if it is a Symbolic Subdivision),
+    then the units imported from it will have the integer feature
+    `alignment:index` which starts at `1` for a given parent element.
+    '''
     identifier = 'eaf'
     short_name = 'ELAN'
     long_name = 'ELAN annotation file'
+    format_specification = 'https://www.mpi.nl/tools/elan/EAF_Annotation_Format_3.0_and_ELAN.pdf'
 
     def read_file(self, root):
         self.names = {}

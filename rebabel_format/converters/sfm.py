@@ -2,9 +2,27 @@ from .reader import LineReader
 import re
 
 class SFMReader(LineReader):
-    identifier = "sfm"
-    short_name = "SFM"
-    long_name = "Standard Format Markers"
+    '''
+    Each block of lines in the file will be imported as `sentence`.
+    Elements in \\tx will be imported as `word`, and elements in `\\mb`
+    and `\\gl` will be imported as `morpheme`. Both `word` and `morpheme`
+    will have the integer feature `meta:index`.
+
+    The following markers are understood (all string features):
+
+    \\ref -> sentence SFM:reference
+
+    \\tx -> word SFM:form
+
+    \\mb -> morpheme SFM:form
+
+    \\gl -> morpheme SFM:gls
+
+    \\ft -> sentence SFM:translation
+    '''
+    identifier = 'sfm'
+    short_name = 'SFM'
+    long_name = 'Standard Format Markers'
 
     block_name = 'sentence'
 

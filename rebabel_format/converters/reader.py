@@ -5,7 +5,6 @@ import logging
 from collections import defaultdict
 
 ALL_READERS = {}
-ALL_DESCRIPTIONS = {}
 
 class ReaderError(Exception):
     pass
@@ -230,26 +229,36 @@ class BaseReader:
 
 class MetaReader(type):
     def __new__(cls, name, bases, attrs):
-        global ALL_READERS, ALL_DESCRIPTIONS
+        global ALL_READERS
         new_attrs = attrs.copy()
         ident = attrs.get('identifier')
-        short_name = attrs.get('short_name')
-        long_name = attrs.get('long_name')
         if ident in ALL_READERS:
             raise ValueError(f'Identifier {ident} is already used by another reader class.')
-        for a, v in attrs.items():
-            if a in ['identifier', 'short_name', 'long_name']:
-                del new_attrs[a]
         if ident:
             new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
         ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
         if ident is not None:
             ALL_READERS[ident] = ret
-            ALL_DESCRIPTIONS[ident] = (short_name, long_name)
         return ret
 
 class Reader(BaseReader, metaclass=MetaReader):
-    pass
+    @classmethod
+    def help_text(cls):
+        if not hasattr(cls, 'identifier'):
+            return ''
+        ret = [f'Identifier: {cls.identifier}']
+        if hasattr(cls, 'short_name'):
+            ret.append(f'Short name: {cls.short_name}')
+        if hasattr(cls, 'long_name'):
+            ret.append(f'Long name: {cls.long_name}')
+        if hasattr(cls, 'format_specification'):
+            ret.append(f'Specification: {cls.format_specification}')
+        if cls.__doc__:
+            import textwrap
+            for piece in textwrap.dedent(cls.__doc__).split('\n\n'):
+                ret.append('')
+                ret += textwrap.wrap(piece)
+        return '\n'.join(ret)
 
 class XMLReader(Reader):
     def open_file(self, pth):

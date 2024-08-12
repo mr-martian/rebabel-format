@@ -2,7 +2,24 @@ from .reader import Reader
 import os
 
 class TextFabricReader(Reader):
+    '''
+    The input file for this reader must be a directory containing files with
+    the extension `.tf`. The unit type is taken from the file `otype.tf`
+    while all other node features are imported as features with the same
+    name in the `textfabric` tier. The value type is either string or integer
+    as specified in the feature file.
+
+    Each unit also has an integer feature named `textfabric-meta:id`, which
+    contains the numeric ID of the unit in Text-Fabric.
+
+    Edges and edge features are imported as units of type `[name]-tf-link`,
+    which have reference features `textfabric-meta:parent` and
+    `textfabric-meta:child`, and a string or integer feature
+    `textfabric-meta:value`, if applicable.
+    '''
+
     identifier = 'textfabric'
+    format_specification = 'https://annotation.github.io/text-fabric/tf/about/fileformats.html'
 
     def open_file(self, pth):
         if not os.path.isdir(pth):

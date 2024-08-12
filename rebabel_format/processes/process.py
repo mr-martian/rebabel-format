@@ -48,16 +48,24 @@ class Process(metaclass=MetaProcess):
         return self.db.get_feature(unittype, tier, feature)
 
     @classmethod
+    def help_text_epilog(cls):
+        return None
+
+    @classmethod
     def help_text(cls):
         import textwrap
         ret = str(cls.name)
         if cls.__doc__:
             ret += ': ' + cls.__doc__
         ret = textwrap.wrap(ret)
+        ret += ['', 'Parameters:']
         for name, param in cls._parameters.items():
             ret += textwrap.wrap(f'{name}: {param.help_text()}',
                                  initial_indent='  ',
                                  subsequent_indent='    ')
+        epilog = cls.help_text_epilog()
+        if epilog:
+            ret += ['', epilog]
         return '\n'.join(ret)
 
 class SearchProcess(Process):

@@ -5,6 +5,17 @@ from .writer import Writer
 from ..config import get_single_param
 
 class FlextextReader(XMLReader):
+    '''
+    The imported unit types will be `interlinear-text`, `paragraph`, `phrase`,
+    `word`, and `morph`, corresponding to the XML nodes of the same names.
+
+    Each unit will have an integer feature `meta:index`, which counts from `1`
+    for a given parent node.
+
+    Any <item> nodes will be imported as string features. The tier will be
+    `FlexText/[lang]`, the feature will be `[type]`, and the value will be
+    the text content of the XML node.
+    '''
     identifier = 'flextext'
     short_name = 'FlexText'
     long_name = 'SIL Fieldworks Language Explorer XML glossed text'
