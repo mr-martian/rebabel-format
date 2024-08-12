@@ -7,7 +7,7 @@ class Search(Process):
     '''Find instances of a pattern in the corpus'''
 
     name = 'query'
-    query = QueryParameter()
+    query = QueryParameter(help='the pattern to search for')
 
     def run(self):
         from ..config import parse_feature

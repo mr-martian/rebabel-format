@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 
 from ..config import get_single_param, parse_feature
+from dataclasses import dataclass
+from typing import Any
 
+@dataclass
 class Parameter:
-    def __init__(self, *args, required=True, default=None, type=None, **kwargs):
-        self.required = required
-        self.default = default
-        if default:
+    required: bool = True
+    default: Any = None
+    type: type = None
+    help: str = 'a parameter'
+
+    def __post_init__(self):
+        if self.default is not None:
             self.required = False
-        self.type = type
 
     def process(self, name, value):
         if value is None:
@@ -26,19 +31,31 @@ class Parameter:
         return self.process(attribute, value)
 
     def help_text(self):
-        return 'a parameter' # TODO
+        paren = []
+        if self.type:
+            paren.append(self.type.__name__)
+        if self.required:
+            paren.append('required')
+        if self.default:
+            paren.append(f'default: {self.default}')
+        ret = self.help
+        if paren:
+            ret += f' ({"; ".join(paren)})'
+        return ret
 
+@dataclass
 class DBParameter(Parameter):
+    type: type = str
+
     def process(self, name, value):
         val = super().process(name, value)
         from ..db import RBBLFile
         return RBBLFile(val)
 
+@dataclass
 class QueryParameter(Parameter):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.type = dict
-        self.required = True
+    type: type = dict
+    required: bool = True
 
     def process(self, name, value):
         val = super().process(name, value)
@@ -54,16 +71,16 @@ class QueryParameter(Parameter):
         # TODO: check parent etc
         return val
 
+@dataclass
 class FeatureParameter(Parameter):
     def process(self, name, value):
         val = super().process(name, value)
         return parse_feature(val)
 
+@dataclass
 class UsernameParameter(Parameter):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.required = False
-        self.type = str
+    required: bool = False
+    type: type = str
 
     def process(self, name, value):
         val = super().process(name, value)

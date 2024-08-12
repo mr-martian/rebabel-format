@@ -4,12 +4,14 @@ from .process import Process
 from .parameters import Parameter, UsernameParameter
 
 class Importer(Process):
+    '''Read the contents of one or more files into the database'''
+
     name = 'import'
-    mode = Parameter(type=str)
-    username = UsernameParameter()
-    infiles = Parameter(type=list)
-    glob = Parameter(type=bool, required=False)
-    mappings = Parameter(type=list, required=False)
+    mode = Parameter(type=str, help='the format of the file(s)')
+    username = UsernameParameter(help='the username for the imported data')
+    infiles = Parameter(type=list, help='the paths to the files')
+    glob = Parameter(type=bool, default=False, help='whether to perform glob expansion on the file names')
+    mappings = Parameter(type=list, required=False, help='feature and type remappings')
 
     def run(self):
         from .. import converters

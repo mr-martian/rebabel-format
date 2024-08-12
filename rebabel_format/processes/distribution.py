@@ -5,14 +5,20 @@ from .parameters import Parameter, FeatureParameter, QueryParameter
 from ..query import ResultTable
 from collections import Counter
 
+# TODO: this process seems oddly specific
+# perhaps queries should support getting arbitrary numbers of children,
+# which would allow this to generalize somewhat
+
 class Distribution(Process):
+    '''Generate a frequency list for instances of a pattern'''
+
     name = 'distribution'
-    query = QueryParameter()
-    center = Parameter(default='Center')
-    child_type = Parameter(type=str)
-    child_print = Parameter(type=list)
-    sort = FeatureParameter(default='meta:index')
-    include = Parameter(default=[], type=list)
+    query = QueryParameter(help='the pattern to search for')
+    center = Parameter(default='Center', help='the element of the pattern which is the parent of the units being counted')
+    child_type = Parameter(type=str, help='the type of the units being counted')
+    child_print = Parameter(type=list, help='the features to count')
+    sort = FeatureParameter(default='meta:index', help='the feature to use for sorting')
+    include = Parameter(default=[], type=list, help='features from the pattern to include when counting')
 
     def display_unit(self, features):
         pieces = []

@@ -29,7 +29,7 @@ class MetaProcess(type):
 
 class Process(metaclass=MetaProcess):
     name = None
-    db = DBParameter()
+    db = DBParameter(help='the database file to operate on')
 
     def __init__(self, conf, **kwargs):
         self.conf = conf

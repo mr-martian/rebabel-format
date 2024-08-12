@@ -5,9 +5,9 @@ from .parameters import Parameter, UsernameParameter
 
 class Transform(Process):
     name = 'transform'
-    sequence = Parameter(type=list)
-    user = UsernameParameter()
-    confidence = Parameter(default=1, type=int)
+    sequence = Parameter(type=list, help='the transformations to apply')
+    user = UsernameParameter(help='the username to assign to changes')
+    confidence = Parameter(default=1, type=int, help='the confidence value to assign to changes')
 
     def run(self):
         from ..transform import transform

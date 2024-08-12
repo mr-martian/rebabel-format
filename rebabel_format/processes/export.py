@@ -4,9 +4,11 @@ from .process import Process
 from .parameters import Parameter
 
 class Export(Process):
+    '''Output the contents of the database in a particular format'''
+
     name = 'export'
-    mode = Parameter(type=str)
-    outfile = Parameter(type=str)
+    mode = Parameter(type=str, help='the format to output')
+    outfile = Parameter(type=str, help='the file to output to')
 
     def run(self):
         from .. import converters

@@ -6,7 +6,7 @@ from collections import defaultdict
 
 class Inspect(Process):
     name = 'inspect'
-    schema = Parameter(type=bool, default=False)
+    schema = Parameter(type=bool, default=False, help='whether to output the defined features for all unit types')
 
     def run(self):
         if self.schema:

@@ -4,11 +4,15 @@ from .process import SearchProcess
 from .parameters import Parameter, FeatureParameter
 
 class Concordance(SearchProcess):
+    '''Perform a concordance search'''
+
     name = 'concordance'
-    center = Parameter(default='Center')
-    width = Parameter(default=2)
-    label = Parameter(type=list)
-    print = FeatureParameter()
+    center = Parameter(default='Center',
+                       help='name of unit in query to center concordance window around')
+    width = Parameter(default=2, help='width of concordance window')
+    label = Parameter(type=list,
+                      help='features of units from the query to label each output line with')
+    print = FeatureParameter(help='feature to display for units in the concordance window')
 
     def get_child_bound(self, uid, child_type, bound, right):
         children = self.db.get_units(child_type, parent=uid)

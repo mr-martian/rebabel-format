@@ -38,6 +38,7 @@ class ConnluReader(LineReader):
         is_token = '-' in name
         self.set_type(name, 'token' if is_token else 'word')
         self.set_parent(name, 'sentence')
+        self.set_feature(name, 'UD', 'id', 'str', name)
         if is_token:
             self.token_idx += 1
             self.set_feature(name, 'meta', 'index', 'int', self.token_idx)
