@@ -27,7 +27,7 @@ CREATE TABLE tiers(
 CREATE TABLE features(
        unit INTEGER,
        feature INTEGER,
-       value INTEGER,
+       value,
        user TEXT,
        confidence INTEGER,
        date datetime DEFAULT (datetime('now')),
@@ -38,7 +38,7 @@ CREATE TABLE features(
 CREATE TABLE suggestions(
        unit INTEGER,
        feature INTEGER,
-       value INTEGER,
+       value,
        date datetime DEFAULT (datetime('now')),
        probability REAL,
        FOREIGN KEY(unit) REFERENCES units(id),
@@ -47,7 +47,7 @@ CREATE TABLE suggestions(
 CREATE TABLE history(
        unit INTEGER,
        feature INTEGER,
-       value INTEGER,
+       value,
        user TEXT,
        confidence INTEGER,
        start datetime DEFAULT (datetime('now')),
