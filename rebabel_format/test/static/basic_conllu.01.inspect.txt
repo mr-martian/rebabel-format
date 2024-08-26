@@ -1,0 +1,22 @@
+sentence
+	UD
+		sent_id: str
+
+word
+	UD
+		deprel: str
+		form: str
+		head: ref
+		id: str
+		lemma: str
+		null: bool
+		upos: str
+		xpos: str
+	UD/FEATS
+		Definiteness: str
+		Number: str
+		Person: str
+	UD/MISC
+		SpaceAfter: bool
+	meta
+		index: int

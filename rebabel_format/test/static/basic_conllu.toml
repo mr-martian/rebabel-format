@@ -1,0 +1,6 @@
+[import]
+mode = 'conllu'
+infiles = ['data/tiny.conllu']
+
+[inspect]
+schema = true

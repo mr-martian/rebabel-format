@@ -1,66 +1,59 @@
 import unittest
 import contextlib
+import glob
 import io
 import os
 import tempfile
 from ..processes.process import ALL_PROCESSES
+from ..config import read_config
 
-class CommandRunner:
-    file_contents = ''
+class StaticTests(unittest.TestCase):
+    '''Run commands and compare the outputs to the files in static/
 
-    def setUp(self):
-        self.db_dir = tempfile.TemporaryDirectory()
-        self.db = os.path.join(self.db_dir.name, 'data.db')
+    To add a new test to this runner:
+    - Create static/NAME.toml with desired parameters
+    - Put any input data in static/data
+    - For each command you want to run:
+      - put the expected output in a file named static/NAME.ORDER.COMMAND.txt
+      - files will be sorted lexicographically, so zero-pad ORDER
+      - outputs will be compared with leading and trailing whitespace trimmed
+    '''
+    def single_command(self, db, config, fname):
+        command = fname.split('.')[-2]
+        with self.subTest(fname):
+            if command == 'export':
+                with tempfile.NamedTemporaryFile() as fout:
+                    proc = ALL_PROCESSES[command](config, db=db, outfile=fout.name)
+                    proc.run()
+                    text = fout.read().decode('utf-8')
+            else:
+                stream = io.StringIO()
+                with contextlib.redirect_stdout(stream):
+                    proc = ALL_PROCESSES[command](config, db=db)
+                    proc.run()
+                text = stream.getvalue()
+            with open(fname) as fin:
+                expected = fin.read()
+                self.assertEqual(expected.strip(), text.strip())
 
-    def run_command(self, name, **kwargs):
-        stream = io.StringIO()
-        with contextlib.redirect_stdout(stream):
-            proc = ALL_PROCESSES[name]({}, db=self.db, **kwargs)
-            proc.run()
-        return stream.getvalue()
-
-    def import_string(self, mode, **kwargs):
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(self.file_contents.encode('utf-8'))
-            f.flush()
-            return self.run_command('import', mode=mode, infiles=[f.name],
-                                    **kwargs)
-
-class ConlluImport(CommandRunner, unittest.TestCase):
-    file_contents = '''
-# sent_id = 1
-1	The	the	DET	dt	Definiteness=Def	2	det	_	_
-2	man	man	NOUN	nn	Number=Sing	3	nsubj	_	_
-3	snores	snore	VERB	vb	Number=Sing|Person=3	0	root	_	SpaceAfter=No
-4	.	.	PUNCT	pc	_	3	punct	_	_
-'''
+    def single_test(self, name):
+        with self.subTest(name):
+            config = read_config(name + '.toml')
+            with tempfile.TemporaryDirectory() as db_dir:
+                db = os.path.join(db_dir, 'data.db')
+                with self.subTest('import'):
+                    proc = ALL_PROCESSES['import'](config, db=db)
+                    proc.run()
+                for path in sorted(glob.glob(name+'.*')):
+                    if path.endswith('.toml') or path.endswith('~'):
+                        continue
+                    self.single_command(db, config, path)
 
     def runTest(self):
-        self.import_string('conllu')
-
-        schema = self.run_command('inspect', schema=True)
-        expected_schema = '''
-sentence
-	UD
-		sent_id: str
-
-word
-	UD
-		deprel: str
-		form: str
-		head: ref
-		id: str
-		lemma: str
-		null: bool
-		upos: str
-		xpos: str
-	UD/FEATS
-		Definiteness: str
-		Number: str
-		Person: str
-	UD/MISC
-		SpaceAfter: bool
-	meta
-		index: int
-'''
-        self.assertEqual(expected_schema.strip(), schema.strip())
+        cwd_was = os.getcwd()
+        dir_name = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'static')
+        os.chdir(dir_name)
+        for fname in glob.glob('*.toml'):
+            self.single_test(fname[:-5])
+        os.chdir(cwd_was)
