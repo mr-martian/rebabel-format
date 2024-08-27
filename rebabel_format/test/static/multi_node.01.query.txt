@@ -1,0 +1,15 @@
+Result 1
+S 1
+	UD:sent_id   	1
+W 3
+	UD:lemma     	man
+W 4
+	UD:lemma     	snore
+
+Result 2
+S 6
+	UD:sent_id   	2
+W 8
+	UD:lemma     	woman
+W 9
+	UD:lemma     	sing

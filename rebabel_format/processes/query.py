@@ -9,12 +9,20 @@ class Search(Process):
     name = 'query'
     query = QueryParameter(help='the pattern to search for')
 
+    def render_unit(self, name, uid):
+        print(name, uid)
+        for lab, fid in self.print_feats[name]:
+            v = str(self.db.get_feature_value(uid, fid))
+            if v is None:
+                continue
+            print('\t'+lab.ljust(self.lab_width+3)+'\t'+v)
+
     def run(self):
         from ..config import parse_feature
         from collections import defaultdict
         from ..query import search
-        print_feats = defaultdict(list)
-        lab_width = 0
+        self.print_feats = defaultdict(list)
+        self.lab_width = 0
         for name, item in self.query.items():
             if not isinstance(item, dict):
                 continue
@@ -24,15 +32,25 @@ class Search(Process):
                 continue
             for p in pr:
                 t, f = parse_feature(p)
-                fid, _ = self.db.get_feature(typ, t, f, error=True)
                 lab = f'{t}:{f}'
-                lab_width = max(lab_width, len(lab))
-                print_feats[name].append((lab, fid))
+                self.lab_width = max(self.lab_width, len(lab))
+                typ_list = typ
+                if not isinstance(typ, list):
+                    typ_list = [typ]
+                got_any = False
+                for single_type in typ_list:
+                    fid, _ = self.db.get_feature(single_type, t, f, error=False)
+                    if fid is None: continue
+                    self.print_feats[name].append((lab, fid))
+                    got_any = True
+                if not got_any:
+                    raise ValueError(f"Could not find print feature '{p}' for unit '{name}'.")
         for n, result in enumerate(search(self.db, self.query), 1):
             print('Result', n)
             for name, uid in sorted(result.items()):
-                print(name, uid)
-                for lab, fid in print_feats[name]:
-                    v = str(self.db.get_feature_value(uid, fid))
-                    print('\t'+lab.ljust(lab_width+3)+'\t'+v)
+                if isinstance(uid, list):
+                    for u in uid:
+                        self.render_unit(name, u)
+                else:
+                    self.render_unit(name, uid)
             print('')

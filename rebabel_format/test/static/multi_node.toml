@@ -1,0 +1,14 @@
+[import]
+mode = 'conllu'
+infiles = ['data/basic.conllu']
+
+[query.S]
+type = 'sentence'
+print = ['UD:sent_id']
+
+[query.W]
+type = ['word', 'token']
+print = ['UD:lemma']
+parent = 'S'
+multiple = true
+features = [{tier = 'UD/FEATS', feature = 'Number', value = 'Sing'}]

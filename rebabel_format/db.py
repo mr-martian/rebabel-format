@@ -6,6 +6,8 @@ import os.path
 import itertools
 import contextlib
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any
 
 def load_schema():
     try:
@@ -19,6 +21,26 @@ sql.register_converter('datetime', lambda b: datetime.datetime.fromisoformat(b.d
 
 sql.register_adapter(bool, lambda bl: b'1' if bl else b'0')
 sql.register_converter('bool', lambda b: False if b == b'0' else True)
+
+@dataclass
+class WhereClause:
+    variable: str
+    value: Any
+    operator: str = '='
+    suffix: str = None
+
+    def toSQL(self):
+        suf = ' ' + self.suffix if self.suffix else ''
+        if isinstance(self.value, list):
+            qs = ', '.join(['?']*len(self.value))
+            list_ops = {
+                '=': 'IN',
+            }
+            if self.operator not in list_ops:
+                raise ValueError(f'Cannot use operator {self.operator} with list value.')
+            return f'{self.variable} {list_ops[self.operator]} ({qs}){suf}', self.value
+        else:
+            return f'{self.variable} {self.operator} ?{suf}', [self.value]
 
 class RBBLFile:
     @contextlib.contextmanager
@@ -53,6 +75,10 @@ class RBBLFile:
         self.cur.execute(qr + ' LIMIT 1', args)
         return self.cur.fetchone()
 
+    def first_clauses(self, qr, *clauses):
+        self.execute_clauses(qr, *clauses)
+        return self.cur.fetchone()
+
     def now(self):
         if self.current_time is None:
             return datetime.datetime.now().isoformat()
@@ -65,6 +91,15 @@ class RBBLFile:
 
     def set_time(self, dt):
         self.current_time = dt
+
+    def execute_clauses(self, prefix, *clauses):
+        params = []
+        terms = []
+        for c in clauses:
+            t, p = c.toSQL()
+            params += p
+            terms.append(t)
+        self.cur.execute(prefix + ' WHERE ' + ' AND '.join(terms), params)
 
     def insert(self, table, *args, **kwargs):
         cols = []
@@ -102,6 +137,18 @@ class RBBLFile:
             if error:
                 raise ValueError('Feature %s:%s does not exist for unit type %s.' % (tier, feature, unittype))
             return None, None
+        return ret
+
+    def get_feature_multi_type(self, unittypes, tier, feature, error=False):
+        self.execute_clauses(
+            'SELECT id, valuetype FROM tiers',
+            WhereClause('tier', tier),
+            WhereClause('feature', feature),
+            WhereClause('unittype', unittypes),
+        )
+        ret = self.cur.fetchall()
+        if error and not ret:
+            raise ValueError(f"Feature '{tier}:{feature}' does not exist for unit type {unittypes}.")
         return ret
 
     def create_unit(self, unittype: str, user=None) -> int:
@@ -226,34 +273,34 @@ class RBBLFile:
         return [x[0] for x in self.cur.fetchall()]
 
     def get_children(self, units: list, child_type: str):
-        plc = ', '.join(['?']*len(units))
-        self.cur.execute(
-            f'SELECT parent, child FROM relations WHERE parent IN ({plc}) AND child_type = ? AND active = ? AND isprimary = ?',
-            units + [child_type, True, True],
-        )
+        self.execute_clauses('SELECT parent, child FROM relations',
+                             WhereClause('parent', units),
+                             WhereClause('child_type', child_type),
+                             WhereClause('active', True),
+                             WhereClause('isprimary', True))
         ret = defaultdict(list)
         for parent, child in self.cur.fetchall():
             ret[parent].append(child)
         return ret
 
     def get_unit_features(self, unitid: int, features):
-        plc = ', '.join(['?']*len(features))
-        self.cur.execute(
-            f'SELECT feature, value FROM features WHERE unit = ? AND feature IN ({plc})',
-            [unitid] + features,
-        )
+        self.execute_clauses('SELECT feature, value FROM features',
+                             WhereClause('unit', unitid),
+                             WhereClause('feature', features))
         return dict(self.cur.fetchall())
 
     def get_feature_value(self, unitid: int, featid: int):
-        ret = self.first('SELECT value FROM features WHERE unit = ? AND feature = ?', unitid, featid)
+        ret = self.first_clauses('SELECT value FROM features',
+                                 WhereClause('unit', unitid),
+                                 WhereClause('feature', featid))
         if ret is not None:
             ret = ret[0]
         return ret
 
     def get_feature_values(self, units, featid):
-        plc = ', '.join(['?']*len(units))
-        self.cur.execute(f'SELECT unit, value FROM features WHERE unit IN ({plc}) AND feature = ?',
-                         units + [featid])
+        self.execute_clauses('SELECT unit, value FROM features',
+                             WhereClause('unit', units),
+                             WhereClause('feature', featid))
         ret = self.cur.fetchall()
         if not ret:
             return {}

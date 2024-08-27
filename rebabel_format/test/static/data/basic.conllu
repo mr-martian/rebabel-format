@@ -1,0 +1,11 @@
+# sent_id = 1
+1	The	the	DET	dt	Definiteness=Def	2	det	_	_
+2	man	man	NOUN	nn	Number=Sing	3	nsubj	_	_
+3	snores	snore	VERB	vb	Number=Sing|Person=3	0	root	_	SpaceAfter=No
+4	.	.	PUNCT	pc	_	3	punct	_	_
+
+# sent_id = 2
+1	The	the	DET	dt	Definiteness=Def	2	det	_	_
+2	woman	woman	NOUN	nn	Number=Sing	3	nsubj	_	_
+3	sings	sing	VERB	vb	Number=Sing|Person=3	0	root	_	SpaceAfter=No
+4	.	.	PUNCT	pc	_	3	punct	_	_

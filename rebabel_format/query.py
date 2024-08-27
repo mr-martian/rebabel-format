@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from .db import RBBLFile
+from .db import RBBLFile, WhereClause
 from .config import parse_feature
 
 from collections import defaultdict
@@ -12,37 +12,30 @@ class FeatureQuery:
         self.featid = featid
         self.value = value
         self.operator = operator
-    def query(self, unitids=None):
-        ret = f'SELECT f.unit, f.value FROM features f WHERE f.feature = ?'
-        params = [self.featid]
+    def run_query(self, db, unitids=None):
+        where = [WhereClause('feature', self.featid)]
         if unitids is not None:
-            if isinstance(unitids, list) and len(unitids) > 0:
-                q = ', '.join(['?']*len(unitids))
-                ret += f' AND f.unit IN ({q})'
-                params += unitids
-            elif isinstance(unitids, str):
-                ret += f' AND f.unit = {unitids}'
+            where.append(WhereClause('unit', unitids))
         if self.operator is None:
             pass
         elif self.operator == 'value':
-            ret += ' AND f.value = ?'
-            params.append(self.value)
+            where.append(WhereClause('value', self.value))
         elif self.operator == 'value_startswith':
-            ret += ' AND f.value LIKE ?'
             v = self.value
             if '%' in v or '_' in v:
-                v = self.like_escape.subn(r'$\1', v)[0]
-                ret += " ESCAPE '$'"
-            v += '%'
-            params.append(v)
-        return ret, params
+                where.append(WhereClause('value',
+                                         self.like_escape.sub(r'$\1', v) + '%',
+                                         operator='LIKE',
+                                         suffix="ESCAPE '$'"))
+            else:
+                where.append(WhereClause('value', v + '%', operator='LIKE'))
+        db.execute_clauses('SELECT unit, value FROM features', *where)
     def check(self, value):
         if self.operator == 'value_startswith':
             return value.startswith(self.value)
         return True
     def get_units(self, db, units=None):
-        qr, params = self.query(units)
-        db.cur.execute(qr, params)
+        self.run_query(db, units)
         return [x[0] for x in db.cur.fetchall() if self.check(x[1])]
 
 class UnitQuery:
@@ -53,8 +46,13 @@ class UnitQuery:
     def add_feature(self, spec):
         if 'tier' not in spec or 'feature' not in spec:
             raise ValueError(f'Invalid feature specifier {spec}.')
-        fid, ftyp = self.db.get_feature(self.unittype, spec['tier'],
-                                        spec['feature'], error=True)
+        feats = self.db.get_feature_multi_type(self.unittype, spec['tier'],
+                                               spec['feature'], error=True)
+        ftypes = sorted(set(f[1] for f in feats))
+        if len(ftypes) > 1:
+            raise ValueError(f"Feature '{spec['tier']}:{spec['feature']}' has multiple types; found {ftypes}.")
+        ftyp = ftypes[0]
+        fid = [f[0] for f in feats]
         if ftyp == 'ref':
             raise NotImplementedError(f'Reference features are not yet supported ({spec}).')
         v = [k for k in spec if k.startswith('value')]
@@ -68,8 +66,7 @@ class UnitQuery:
     def check(self, fq, ids):
         if not ids:
             return []
-        q, p = fq.query(ids)
-        self.db.cur.execute(q, p)
+        fq.run_query(self.db, ids)
         ret = []
         for i, v in self.db.cur.fetchall():
             if fq.check(v):
@@ -81,21 +78,10 @@ class UnitQuery:
             units = f.get_units(self.db, units)
             if units == []:
                 return []
-        qr = 'SELECT u.id FROM units u WHERE type'
-        params = []
-        if isinstance(self.unittype, str):
-            qr += ' = ?'
-            params.append(self.unittype)
-        elif isinstance(self.unittype, list):
-            qr += ' IN (' + ', '.join(['?']*len(self.unittype)) + ')'
-            params += self.unittype
-        else:
-            raise ValueError(f"Invalid unit type specifier '{self.unittype}'.")
+        where = [WhereClause('type', self.unittype)]
         if units:
-            plc = ', '.join(['?']*len(units))
-            qr += f' AND id IN ({plc})'
-            params += units
-        self.db.cur.execute(qr, params)
+            where.append(WhereClause('id', units))
+        self.db.execute_clauses('SELECT id FROM units', *where)
         ids = [x[0] for x in self.db.cur.fetchall()]
         return ids
 
@@ -170,6 +156,7 @@ def search(db, query):
     units = {}
     rels = [] # [(parent, child), ...]
     seq_rels = [] # [(A, B, type, immediate), ...]
+    multi_leaf = None
     for name, pattern in query.items():
         if not isinstance(pattern, dict):
             continue
@@ -179,7 +166,11 @@ def search(db, query):
         for spec in pattern.get('features', []):
             uq.add_feature(spec)
         units[name] = uq.get_units()
-        if not units[name]:
+        if pattern.get('multiple', False):
+            if multi_leaf is not None:
+                raise ValueError(f'Cannot have both {multi_leaf} and {name} as multi-nodes.')
+            multi_leaf = name
+        elif not units[name]:
             return
         if 'parent' in pattern:
             if pattern['parent'] not in query:
@@ -199,12 +190,12 @@ def search(db, query):
     # DGS 2023-11-21
     intersect = IntersectionTracker({x: set(y) for x, y in units.items()})
     for parent, child in rels:
-        q1 = ', '.join(['?']*len(units[parent]))
-        q2 = ', '.join(['?']*len(units[child]))
-        db.cur.execute(
-            f'SELECT parent, child FROM relations WHERE parent IN ({q1}) AND child IN ({q2}) AND active = ?',
-            units[parent] + units[child] + [True],
-        )
+        if parent == multi_leaf:
+            raise ValueError(f'Node {parent} cannot have both children and multiple = true.')
+        db.execute_clauses('SELECT parent, child FROM relations',
+                           WhereClause('parent', units[parent]),
+                           WhereClause('child', units[child]),
+                           WhereClause('active', True))
         pairs = set(db.cur.fetchall())
         if not pairs:
             return
@@ -223,14 +214,20 @@ def search(db, query):
         intersect.restrict(A, B, pairs)
     intersect.make_dict()
     seq = sorted(units.keys())
+    if multi_leaf:
+        seq = [s for s in seq if s != multi_leaf] + [multi_leaf]
     def combine(cur):
-        nonlocal seq, units, intersect
+        nonlocal seq, units, intersect, multi_leaf
         if len(cur) == len(seq):
             yield dict(zip(seq, cur))
         else:
-            u = intersect.possible(dict(zip(seq, cur)), seq[len(cur)])
-            for i in sorted(u):
-                yield from combine(cur + [i])
+            name = seq[len(cur)]
+            u = sorted(intersect.possible(dict(zip(seq, cur)), name))
+            if name == multi_leaf:
+                yield from combine(cur + [u])
+            else:
+                for i in u:
+                    yield from combine(cur + [i])
     yield from combine([])
 
 class ResultTable:
@@ -271,27 +268,17 @@ class ResultTable:
                 feats.append(f)
             else:
                 tier, feature = parse_feature(f)
-                args = [tier, feature]
-                if isinstance(types, str):
-                    args.append(types)
-                    ut = '= ?'
-                else:
-                    args += types
-                    ut = 'IN (' + ', '.join(['?']*len(types)) + ')'
-                f = self.db.first(
-                    f'SELECT id FROM tiers WHERE tier = ? AND feature = ? AND unittype {ut}',
-                    *args,
-                )
+                f = self.db.first_clauses('SELECT id FROM tiers',
+                                          WhereClause('tier', tier),
+                                          WhereClause('feature', feature),
+                                          WhereClause('unittype', types))
                 if f is None:
                     raise ValueError(f'Feature {tier}:{feature} does not exist for unit type {types}.')
                 feats.append(f[0])
         units = list(set(self._node_ids(node)))
-        uplc = ', '.join(['?']*len(units))
-        fplc = ', '.join(['?']*len(feats))
-        self.db.cur.execute(
-            f'SELECT unit, feature, value FROM features WHERE unit in ({uplc}) AND feature IN ({fplc})',
-            units + feats,
-        )
+        self.db.execute_clauses('SELECT unit, feature, value FROM features',
+                                WhereClause('unit', units),
+                                WhereClause('feature', feats))
         for u, f, v in self.db.cur.fetchall():
             for rid in self.unit2results[u]:
                 if self._right_node(rid, node, u):
