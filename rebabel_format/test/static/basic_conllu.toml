@@ -4,3 +4,32 @@ infiles = ['data/tiny.conllu']
 
 [inspect]
 schema = true
+
+[query.W]
+type = 'word'
+features = [{tier = 'UD/FEATS', feature = 'Number', value = 'Sing'}]
+print = ['UD:id', 'UD:lemma']
+
+[transform]
+sequence = ['rule1']
+
+[transform.rule1.query.V]
+type = 'word'
+features = [{tier = 'UD', feature = 'upos', value = 'VERB'}]
+
+[[transform.rule1.commands]]
+type = 'set_feature'
+target = 'V'
+tier = 'UD'
+feature = 'lemma'
+value = 'gargle'
+
+[[transform.rule1.commands]]
+type = 'set_feature'
+target = 'V'
+tier = 'UD'
+feature = 'xpos'
+value = 'ninja'
+
+[export]
+mode = 'conllu'

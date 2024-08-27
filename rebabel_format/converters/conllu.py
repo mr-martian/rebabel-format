@@ -166,6 +166,11 @@ class ConlluWriter(Writer):
                     if tier == 'UD/FEATS':
                         FEAT.append(f'{feat}={v}')
                     elif tier == 'UD/MISC':
+                        if feat == 'SpaceAfter' and typ == 'bool':
+                            if not v or v == b'0':
+                                v = 'No'
+                            else:
+                                v = 'Yes'
                         MISC.append(f'{feat}={v}')
                     elif tier == 'UD':
                         if feat == 'form':
@@ -189,4 +194,7 @@ class ConlluWriter(Writer):
                 if h in id2idx:
                     words[i][6] = id2idx[h]
             # TODO: tokens
+            for row in words:
+                if row[6] == '_' and row[7] == 'root':
+                    row[6] = '0'
             fout.write('\n'.join('\t'.join(row) for row in words) + '\n\n')

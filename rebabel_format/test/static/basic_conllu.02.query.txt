@@ -1,0 +1,9 @@
+Result 1
+W 3
+	UD:id      	2
+	UD:lemma   	man
+
+Result 2
+W 4
+	UD:id      	3
+	UD:lemma   	snore

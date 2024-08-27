@@ -14,4 +14,4 @@ class Transform(Process):
         from ..config import get_single_param
         for rule in self.sequence:
             transform(self.db, get_single_param(self.conf, 'transform', rule),
-                      username=self.username, confidence=self.confidence)
+                      username=self.user, confidence=self.confidence)
