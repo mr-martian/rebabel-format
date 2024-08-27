@@ -12,7 +12,7 @@ def load_schema():
         from importlib.resources import files
     except ImportError:
         from importlib_resources import files
-    return files().joinpath('schema.sql').read_text()
+    return files('rebabel_format').joinpath('schema.sql').read_text()
 
 sql.register_adapter(datetime.datetime, lambda d: d.isoformat())
 sql.register_converter('datetime', lambda b: datetime.datetime.fromisoformat(b.decode()))
