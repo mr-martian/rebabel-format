@@ -301,11 +301,7 @@ class RBBLFile:
         self.execute_clauses('SELECT unit, value FROM features',
                              WhereClause('unit', units),
                              WhereClause('feature', featid))
-        ret = self.cur.fetchall()
-        if not ret:
-            return {}
-        else:
-            return dict(ret)
+        return dict(self.cur.fetchall())
 
 class Unit:
     FeatureCache = {} # (tier, feature, type) => (id, valuetype)

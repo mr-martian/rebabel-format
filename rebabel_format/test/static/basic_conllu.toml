@@ -9,6 +9,7 @@ schema = true
 type = 'word'
 features = [{tier = 'UD/FEATS', feature = 'Number', value = 'Sing'}]
 print = ['UD:id', 'UD:lemma']
+order = 'UD:lemma'
 
 [transform]
 sequence = ['rule1']

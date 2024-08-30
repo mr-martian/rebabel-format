@@ -152,8 +152,17 @@ class IntersectionTracker:
             ret = ret.intersection(self.lookup(k, name, dct[k]))
         return ret
 
-def search(db, query):
+def make_sequence(units, order, multi_leaf):
+    base = [u for u in (order or sorted(units)) if u != multi_leaf]
+    ret = [u for u in base if u in units]
+    ret += [u for u in sorted(units) if u not in ret and u != multi_leaf]
+    if multi_leaf:
+        ret.append(multi_leaf)
+    return ret
+
+def search(db, query, order=None):
     units = {}
+    order_by = {}
     rels = [] # [(parent, child), ...]
     seq_rels = [] # [(A, B, type, immediate), ...]
     multi_leaf = None
@@ -172,6 +181,16 @@ def search(db, query):
             multi_leaf = name
         elif not units[name]:
             return
+        if 'order' in pattern:
+            tier, feature = parse_feature(pattern['order'])
+            feats = db.get_feature_multi_type(pattern['type'], tier, feature,
+                                              error=False)
+            if not feats:
+                raise ValueError(f"Cannot find feature '{spec['tier']}:{spec['feature']}' for ordering unit '{name}'.")
+            if len(set(f[1] for f in feats)) > 1:
+                raise ValueError(f"Cannot sort unit '{name}' by feature '{spec['tier']}:{spec['feature']}' because it has multiple types.")
+            order_by[name] = db.get_feature_values(units[name],
+                                                   [f[0] for f in feats])
         if 'parent' in pattern:
             if pattern['parent'] not in query:
                 raise ValueError(f'No node named {pattern["parent"]} (referenced by {name}).')
@@ -213,16 +232,29 @@ def search(db, query):
             return
         intersect.restrict(A, B, pairs)
     intersect.make_dict()
-    seq = sorted(units.keys())
-    if multi_leaf:
-        seq = [s for s in seq if s != multi_leaf] + [multi_leaf]
+    seq = make_sequence(set(units.keys()), order, multi_leaf)
+    def sort_units(name, uids):
+        nonlocal order_by
+        if name not in order_by:
+            return sorted(uids)
+        else:
+            val = []
+            noval = []
+            for u in uids:
+                v = order_by[name].get(u)
+                if v is None:
+                    noval.append(u)
+                else:
+                    val.append((v, u))
+            return [u for v, u in sorted(val)] + sorted(noval)
     def combine(cur):
         nonlocal seq, units, intersect, multi_leaf
         if len(cur) == len(seq):
             yield dict(zip(seq, cur))
         else:
             name = seq[len(cur)]
-            u = sorted(intersect.possible(dict(zip(seq, cur)), name))
+            u = sort_units(name,
+                           intersect.possible(dict(zip(seq, cur)), name))
             if name == multi_leaf:
                 yield from combine(cur + [u])
             else:
@@ -231,9 +263,9 @@ def search(db, query):
     yield from combine([])
 
 class ResultTable:
-    def __init__(self, db, query):
+    def __init__(self, db, query, order=None):
         self.db = db
-        self.nodes = list(search(db, query))
+        self.nodes = list(search(db, query, order=order))
         self.features = [{v: {} for v in r.values()} for r in self.nodes]
         self.types = {k: v['type'] for k, v in query.items()
                       if isinstance(v, dict)}
