@@ -5,7 +5,22 @@ from ..config import parse_feature
 
 ALL_WRITERS = {}
 
-class BaseWriter:
+class MetaWriter(type):
+    def __new__(cls, name, bases, attrs):
+        global ALL_WRITERS
+        new_attrs = attrs.copy()
+        ident = attrs.get('identifier')
+        if ident in ALL_WRITERS:
+            raise ValueError(f'Identifier {ident} is already used by another writer class.')
+        for a, v in attrs.items():
+            if a in ['identifier']:
+                del new_attrs[a]
+        ret = super(MetaWriter, cls).__new__(cls, name, bases, new_attrs)
+        if ident is not None:
+            ALL_WRITERS[ident] = ret
+        return ret
+
+class Writer(metaclass=MetaWriter):
     def __init__(self, db, conf):
         self.db = db
         self.conf = conf
@@ -52,33 +67,3 @@ class BaseWriter:
 
     def write(self, fout):
         pass
-
-class MetaWriter(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_WRITERS
-        new_attrs = attrs.copy()
-        ident = attrs.get('identifier')
-        if ident in ALL_WRITERS:
-            raise ValueError(f'Identifier {ident} is already used by another writer class.')
-        for a, v in attrs.items():
-            if a in ['identifier']:
-                del new_attrs[a]
-        ret = super(MetaWriter, cls).__new__(cls, name, bases, new_attrs)
-        if ident is not None:
-            ALL_WRITERS[ident] = ret
-        return ret
-
-class Writer(BaseWriter, metaclass=MetaWriter):
-    pass
-
-def write(conf):
-    from ..config import get_single_param
-    mode = get_single_param(conf, 'export', 'mode')
-    if mode not in ALL_WRITERS:
-        raise ValueError(f'Unknown writer {mode}.')
-    in_path = get_single_param(conf, 'export', 'db')
-    out_path = get_single_param(conf, 'export', 'outfile')
-    db = RBBLFile(in_path)
-    w = ALL_WRITERS[mode](db, conf)
-    with open(out_path, 'w') as fout:
-        w.write(fout)

@@ -9,7 +9,21 @@ ALL_READERS = {}
 class ReaderError(Exception):
     pass
 
-class BaseReader:
+class MetaReader(type):
+    def __new__(cls, name, bases, attrs):
+        global ALL_READERS
+        new_attrs = attrs.copy()
+        ident = attrs.get('identifier')
+        if ident in ALL_READERS:
+            raise ValueError(f'Identifier {ident} is already used by another reader class.')
+        if ident:
+            new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
+        ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
+        if ident is not None:
+            ALL_READERS[ident] = ret
+        return ret
+
+class Reader(metaclass=MetaReader):
     def __init__(self, db, user):
         self.db = db
         self.user = user
@@ -227,21 +241,6 @@ class BaseReader:
             self.read_file(fin)
             self.close_file(fin)
 
-class MetaReader(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_READERS
-        new_attrs = attrs.copy()
-        ident = attrs.get('identifier')
-        if ident in ALL_READERS:
-            raise ValueError(f'Identifier {ident} is already used by another reader class.')
-        if ident:
-            new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
-        ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
-        if ident is not None:
-            ALL_READERS[ident] = ret
-        return ret
-
-class Reader(BaseReader, metaclass=MetaReader):
     @classmethod
     def help_text(cls):
         if not hasattr(cls, 'identifier'):
