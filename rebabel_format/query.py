@@ -2,6 +2,7 @@
 
 from .db import RBBLFile, WhereClause
 from .config import parse_feature
+from . import utils
 
 from collections import defaultdict
 import re
@@ -262,9 +263,39 @@ def search(db, query, order=None):
                     yield from combine(cur + [i])
     yield from combine([])
 
+def map_query(query, type_map, feat_map):
+    '''Mutate `query` based on mappings'''
+
+    def map_feat(oldfeat, oldtypes):
+        nonlocal feat_map
+        tier, feat = parse_feature(oldfeat)
+        for typ in oldtypes + [None]:
+            if ((tier, feat), typ) in feat_map:
+                return feat_map[((tier, feat), typ)][0]
+        return tier, feat
+
+    if not type_map and not feat_map:
+        return
+    for k, v in query.items():
+        if not isinstance(v, dict):
+            continue
+        oldtypes = utils.as_list(v['type'])
+        v['type'] = [type_map.get(t, t) for t in oldtypes]
+        if 'order' in v:
+            t, f = map_feat(v['order'], oldtypes)
+            v['order'] = {'tier': t, 'feature': f}
+        if 'features' in v:
+            for dct in v['features']:
+                dct['tier'], dct['feature'] = map_feat(dct, oldtypes)
+
 class ResultTable:
-    def __init__(self, db, query, order=None):
+    def __init__(self, db, query, order=None, type_map=None, feat_map=None):
         self.db = db
+        self.type_map = type_map or {}
+        self.rev_type_map = {v:k for k, v in self.type_map.items()}
+        self.feat_map = feat_map or {}
+        self.rev_feat_map = {v:k for k, v in self.feat_map.items()}
+        map_query(query, self.rev_type_map, self.rev_feat_map)
         self.nodes = list(search(db, query, order=order))
         self.features = [{v: {} for v in r.values()} for r in self.nodes]
         self.types = {k: v['type'] for k, v in query.items()
@@ -272,7 +303,8 @@ class ResultTable:
         self.unit2results = defaultdict(list)
         for i, result in enumerate(self.nodes):
             for uid in result.values():
-                self.unit2results[uid].append(i)
+                for u in utils.as_list(uid):
+                    self.unit2results[u].append(i)
 
     def _node_ids(self, name: str):
         for result in self.nodes:
@@ -282,40 +314,92 @@ class ResultTable:
             else:
                 yield from ret
 
-    def _right_node(self, result_id, node_name, node_id):
-        val = self.nodes[result_id][node_name]
-        if isinstance(val, int) and val == node_id:
-            return True
-        elif isinstance(val, list) and node_id in val:
-            return True
-        return False
+    def get_type(self, uid) -> str:
+        db_type = self.db.get_unit_type(uid)
+        return self.type_map.get(db_type, db_type)
 
-    def add_features(self, node: str, features: list):
+    def get_relations(self, parents, children):
+        self.db.execute_clauses('SELECT parent, child FROM relations',
+                                WhereClause('parent', parents),
+                                WhereClause('children', children))
+        return self.db.cur.fetchall()
+
+    def add_features(self, node: str, features: list, map_features=True):
         if node is None:
             return [None] * len(features)
         types = self.types[node]
         feats = []
+        feat_types = {}
         for f in features:
             if isinstance(f, int):
                 feats.append(f)
+                t = self.db.first_clauses('SELECT valuetype FROM tiers',
+                                          WhereClause('id', f))
+                if t is None:
+                    raise ValueError(f'No feature with id {f}.')
+                feat_types[f] = t[0]
             else:
                 tier, feature = parse_feature(f)
-                f = self.db.first_clauses('SELECT id FROM tiers',
+                if map_features:
+                    for typ in self.types[node] + [None]:
+                        key = ((tier, feature), typ)
+                        if key in self.rev_feature_map:
+                            tier, feature = self.rev_feature_map[key][0]
+                # TODO: If there's multiple types, this should get all
+                # features. We probably want to return a dict from this
+                # function.
+                f = self.db.first_clauses('SELECT id, valuetype FROM tiers',
                                           WhereClause('tier', tier),
                                           WhereClause('feature', feature),
                                           WhereClause('unittype', types))
                 if f is None:
                     raise ValueError(f'Feature {tier}:{feature} does not exist for unit type {types}.')
                 feats.append(f[0])
+                feat_types[f[0]] = f[1]
         units = list(set(self._node_ids(node)))
         self.db.execute_clauses('SELECT unit, feature, value FROM features',
                                 WhereClause('unit', units),
                                 WhereClause('feature', feats))
         for u, f, v in self.db.cur.fetchall():
+            v = self.db.interpret_value(v, feat_types[f])
             for rid in self.unit2results[u]:
-                if self._right_node(rid, node, u):
+                if u in utils.as_list(self.nodes[rid][node]):
                     self.features[rid][u][f] = v
         return feats
+
+    def add_tier(self, node: str, tier: str, prefix=False):
+        tier_list = [tier]
+        if prefix:
+            self.db.execute_clauses('SELECT DISTINCT tier FROM tiers',
+                                    WhereClause('unittype', self.types[node]))
+            tier_list = [t[0] for t in self.db.cur.fetchall()
+                         if t[0].startswith(tier)]
+        names = []
+        feats = []
+        skip = set()
+        for (fi, ti), (fo, to) in self.feat_map.items():
+            if ti and ti not in self.types[node]:
+                continue
+            if fo[0] == tier or (prefix and fo[0].startswith(tier)):
+                f = self.db.first_clauses('SELECT id FROM tiers',
+                                          WhereClause('tier', fi[0]),
+                                          WhereClause('feature', fi[1]),
+                                          WhereClause('unittype', self.types[node]))
+                if f:
+                    feats.append(f[0])
+                    names.append(fo)
+            if fi[0] == tier or (prefix and fi[0].startswith(tier)):
+                skip.add(fi)
+        self.db.execute_clauses('SELECT id, tier, feature FROM tiers',
+                                WhereClause('unittype', self.types[node]),
+                                WhereClause('tier', tier_list))
+        for i, t, f in self.db.cur.fetchall():
+            if (t, f) in skip:
+                continue
+            feats.append(i)
+            names.append((t, f))
+        ids = self.add_features(node, feats, map_features=False)
+        return dict(zip(names, ids))
 
     def add_children(self, node, child_type):
         if not self.nodes:

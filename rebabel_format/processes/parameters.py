@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from ..config import get_single_param, parse_feature
+from ..config import get_single_param, parse_feature, parse_mappings
 from dataclasses import dataclass
 from typing import Any
 
@@ -76,6 +76,14 @@ class FeatureParameter(Parameter):
     def process(self, name, value):
         val = super().process(name, value)
         return parse_feature(val)
+
+@dataclass
+class MappingParameter(Parameter):
+    type: type = list
+
+    def process(self, name, value):
+        val = super().process(name, value)
+        return parse_mappings(val)
 
 @dataclass
 class UsernameParameter(Parameter):

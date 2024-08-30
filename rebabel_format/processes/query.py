@@ -2,6 +2,7 @@
 
 from .process import Process
 from .parameters import QueryParameter
+from .. import utils
 
 class Search(Process):
     '''Find instances of a pattern in the corpus'''
@@ -34,11 +35,8 @@ class Search(Process):
                 t, f = parse_feature(p)
                 lab = f'{t}:{f}'
                 self.lab_width = max(self.lab_width, len(lab))
-                typ_list = typ
-                if not isinstance(typ, list):
-                    typ_list = [typ]
                 got_any = False
-                for single_type in typ_list:
+                for single_type in utils.as_list(typ):
                     fid, _ = self.db.get_feature(single_type, t, f, error=False)
                     if fid is None: continue
                     self.print_feats[name].append((lab, fid))
@@ -48,9 +46,6 @@ class Search(Process):
         for n, result in enumerate(search(self.db, self.query), 1):
             print('Result', n)
             for name, uid in sorted(result.items()):
-                if isinstance(uid, list):
-                    for u in uid:
-                        self.render_unit(name, u)
-                else:
-                    self.render_unit(name, uid)
+                for u in utils.as_list(uid):
+                    self.render_unit(name, u)
             print('')

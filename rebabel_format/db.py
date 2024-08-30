@@ -101,6 +101,24 @@ class RBBLFile:
             terms.append(t)
         self.cur.execute(prefix + ' WHERE ' + ' AND '.join(terms), params)
 
+    def interpret_value(self, value, valuetype):
+        if value is None:
+            return value
+        elif valuetype == 'str':
+            if isinstance(value, bytes):
+                return value.decode('utf-8')
+            else:
+                return str(value)
+        elif valuetype == 'bool':
+            if isinstance(value, bytes):
+                return value != b'0'
+            return bool(value)
+        else: # int, ref
+            if isinstance(value, int):
+                return value
+            elif isinstance(value, bytes):
+                return int(value.decode('utf-8'))
+
     def insert(self, table, *args, **kwargs):
         cols = []
         qs = []

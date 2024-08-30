@@ -125,78 +125,115 @@ class ConnluReader(LineReader):
 class ConlluWriter(Writer):
     identifier = 'conllu'
 
+    query_order = ['sentence', 'word']
+    query = {
+        'sentence': {
+            'type': 'sentence',
+            'order': 'meta:index',
+        },
+        'word': {
+            'type': ['word', 'token', 'UD-edep'],
+            'parent': 'sentence',
+        },
+    }
+
     def write(self, fout):
-        # TODO: sorting (meta:index?)
-        feat_dict = self.all_feats_from_tiers(['UD', 'UD/FEATS', 'UD/MISC'])
-        feat_list = list(feat_dict.keys())
-        sent_id = None
-        null = None
-        for k, v in feat_dict.items():
-            if v == ('UD', 'sent_id', 'str') or v == ('UD', 'sent_id', 'int'):
-                sent_id = k
-            elif v == ('UD', 'null', 'bool'):
-                null = k
-        for sid, sfeats in self.iter_units('sentence', feat_list):
-            si = sfeats.get(sent_id, sid)
-            fout.write(f'# sent_id = {si}\n')
-            for k, v in sfeats.items():
-                if k == sent_id:
+        feat2col = {'form': 1, 'lemma': 2, 'upos': 3, 'xpos': 4, 'deprel': 7}
+        sent_feats = self.table.add_tier('sentence', 'UD', prefix=False)
+        word_feats = self.table.add_tier('word', 'UD', prefix=True)
+        sent_id = sent_feats.get(('UD', 'sent_id'))
+        sent_feat_ids = sorted([(f, i) for (t, f), i in sent_feats.items()
+                                if f != 'sent_id'])
+        word_feat_ids = sorted([(t, f, i) for (t, f), i in word_feats.items()])
+        import itertools
+        for _, word_group in itertools.groupby(self.table.results(),
+                                               lambda x: x[0]['sentence']):
+            sentence = list(word_group)
+            sid = sentence[0][0]['sentence']
+            sfeats = sentence[0][1][sid]
+            if sent_id in sfeats:
+                fout.write(f'# sent_id = {sfeats[sent_id]}\n')
+            for feat, fid in sent_feat_ids:
+                if fid in sfeats:
+                    fout.write(f'# {feat} = {sfeats[fid]}\n')
+
+            table = []
+            wid2idx = {}
+            wid2num = {}
+
+            word_num = 0
+            null_num = 0
+
+            tokens = []
+            heads = {}
+
+            for idx, (id_dict, feat_dict) in enumerate(sentence):
+                wid = id_dict['word']
+                word_type = self.table.get_type(wid)
+                if word_type == 'UD-edep':
+                    # TODO
                     continue
-                tier, feat, typ = feat_dict[k]
-                if tier == 'UD':
-                    fout.write(f'# {feat} = {v}\n')
-            words = []
-            id2idx = {}
-            idx1 = 0
-            idx2 = 0
-            heads = [] # [(words index, id), ...]
-            for wid, wfeats in self.iter_units('word', feat_list, sid):
-                widx = ''
-                if wfeats.get(null, False) == True:
-                    idx2 += 1
-                    widx = f'{idx1}:{idx2}'
-                else:
-                    idx1 += 1
-                    idx2 = 0
-                    widx = str(idx1)
-                id2idx[wid] = widx
-                row = [widx] + ['_']*9
-                FEAT = []
-                MISC = []
-                for i, v in wfeats.items():
-                    tier, feat, typ = feat_dict[i]
-                    if tier == 'UD/FEATS':
-                        FEAT.append(f'{feat}={v}')
-                    elif tier == 'UD/MISC':
-                        if feat == 'SpaceAfter' and typ == 'bool':
-                            if not v or v == b'0':
-                                v = 'No'
-                            else:
-                                v = 'Yes'
-                        MISC.append(f'{feat}={v}')
-                    elif tier == 'UD':
-                        if feat == 'form':
-                            row[1] = v
-                        elif feat == 'lemma':
-                            row[2] = v
-                        elif feat == 'upos':
-                            row[3] = v
-                        elif feat == 'xpos':
-                            row[4] = v
-                        elif feat == 'deprel':
-                            row[7] = v
+                line = ['_' for i in range(10)]
+                wfeats = feat_dict[wid]
+                null = False
+                ufeats = []
+                umisc = []
+                for tier, feat, fid in word_feat_ids:
+                    val = wfeats.get(fid)
+                    if val is None:
+                        continue
+                    if tier == 'UD':
+                        if feat in feat2col:
+                            line[feat2col[feat]] = str(val)
                         elif feat == 'head':
-                            heads.append((len(words), v))
-                if FEAT:
-                    row[5] = '|'.join(sorted(FEAT))
-                if MISC:
-                    row[9] = '|'.join(sorted(MISC))
-                words.append(row)
-            for i, h in heads:
-                if h in id2idx:
-                    words[i][6] = id2idx[h]
-            # TODO: tokens
-            for row in words:
-                if row[6] == '_' and row[7] == 'root':
-                    row[6] = '0'
-            fout.write('\n'.join('\t'.join(row) for row in words) + '\n\n')
+                            heads[wid] = val
+                        elif feat == 'null' and val:
+                            null = True
+                    elif tier == 'UD/FEATS':
+                        if isinstance(val, bool):
+                            val = 'Yes' if val else 'No'
+                        ufeats.append(f'{feat}={val}')
+                    elif tier == 'UD/MISC':
+                        if isinstance(val, bool):
+                            val = 'Yes' if val else 'No'
+                        umisc.append(f'{feat}={val}')
+                if ufeats:
+                    line[5] = '|'.join(ufeats)
+                if umisc:
+                    line[9] = '|'.join(umisc)
+                if word_type == 'word':
+                    if null:
+                        null_num += 1
+                        line[0] = f'{word_num}.{null_num}'
+                    else:
+                        word_num += 1
+                        null_num = 0
+                        line[0] = str(word_num)
+                    wid2num[wid] = (word_num, null_num)
+                    wid2idx[wid] = len(table)
+                    table.append(line)
+                else:
+                    tokens.append((wid, line))
+
+            for dep, head in heads.items():
+                if head not in wid2idx:
+                    continue
+                table[wid2idx[dep]][6] = table[wid2idx[head]][0]
+            for i in range(len(table)):
+                if table[i][6] == '_' and table[i][7] == 'root':
+                    table[i][6] = '0'
+
+            token_rels = self.table.get_relations([t[0] for t in tokens],
+                                                  list(wid2num.keys()))
+            token_rels.sort()
+            for tid, pairs in itertools.groupby(token_rels, key=lambda x: x[0]):
+                words = [p[1] for p in pairs]
+                nums = []
+                for w in words:
+                    if w in wid2num:
+                        nums.append(wid2num[w][0])
+                if nums:
+                    # TODO: get word range and insert into table
+                    pass
+
+            fout.write('\n'.join('\t'.join(row) for row in table) + '\n\n')

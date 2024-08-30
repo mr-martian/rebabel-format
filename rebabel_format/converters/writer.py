@@ -21,49 +21,20 @@ class MetaWriter(type):
         return ret
 
 class Writer(metaclass=MetaWriter):
-    def __init__(self, db, conf):
+    query = {}
+    query_order = []
+
+    def __init__(self, db, conf, type_map=None, feat_map=None):
         self.db = db
         self.conf = conf
-        self.type_mapping = {} # src > dest
-        self.rev_type_mapping = {} # dest > src
-        self.feat_mapping = {}
-        self.rev_feat_mapping = {}
-        for k, v in conf.get('mapping', {}).items():
-            to_type = k
-            if 'type' in v:
-                to_type = v['type']
-                self.type_mapping[v['type']] = k
-                self.rev_type_mapping[k] = v['type']
-            for tier, fd in v.items():
-                if not isinstance(fd, dict):
-                    continue
-                for featname, spec in fd.items():
-                    to_tier, to_feat = parse_feature(spec)
-                    i, _ = self.db.get_feature(k, tier, featname, error=True)
-                    self.feat_mapping[(to_type, to_tier, to_feat)] = i
-                    self.rev_feat_mapping[i] = (to_type, to_tier, to_feat)
+        if self.query:
+            self.pre_query()
+            from ..query import ResultTable
+            self.table = ResultTable(self.db, self.query, self.query_order,
+                                     type_map=type_map, feat_map=feat_map)
 
-    def all_tiers(self):
-        ret = set(x[1] for x in self.db.get_all_features())
-        for typ, tier, feat in self.feat_mapping:
-            ret.add(tier)
-        return ret
-
-    def all_feats_from_tiers(self, tiers):
-        ret = {}
-        keep = [v for k,v in self.feat_mapping.items() if k[1] in tiers]
-        for fid, tier, feat, utyp, vtyp in self.db.get_all_features():
-            if fid in self.rev_feat_mapping:
-                utyp, tier, feat = self.rev_feat_mapping[fid]
-            if tier in tiers:
-                ret[fid] = (tier, feat, vtyp)
-        return ret
-
-    def iter_units(self, utyp, featlist, parent=None):
-        ls = self.db.get_units(self.type_mapping.get(utyp, utyp), parent=parent)
-        ls.sort()
-        for i in ls:
-            yield i, self.db.get_unit_features(i, featlist)
+    def pre_query(self):
+        pass
 
     def write(self, fout):
         pass

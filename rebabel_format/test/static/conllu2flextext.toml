@@ -1,0 +1,20 @@
+[import]
+mode = 'conllu'
+infiles = ['data/basic.conllu']
+
+[export]
+mode = 'flextext'
+root = 'phrase'
+skip = ['morph']
+
+[[export.mappings]]
+in_type = 'sentence'
+out_type = 'phrase'
+
+[[export.mappings]]
+in_feature = 'UD:lemma'
+out_feature = 'FlexText/en:lem'
+
+[[export.mappings]]
+in_feature = 'UD:sent_id'
+out_feature = 'FlexText/en:sid'

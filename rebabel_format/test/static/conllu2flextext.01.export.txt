@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<document version="2">
+  <interlinear-text>
+    <paragraphs>
+      <paragraph>
+        <phrases>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="lem">the</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">man</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">snore</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">.</item>
+              </word>
+            </words>
+            <item lang="en" type="sid">1</item>
+          </phrase>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="lem">the</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">woman</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">sing</item>
+              </word>
+              <word>
+                <item lang="en" type="lem">.</item>
+              </word>
+            </words>
+            <item lang="en" type="sid">2</item>
+          </phrase>
+        </phrases>
+      </paragraph>
+    </paragraphs>
+  </interlinear-text>
+</document>
