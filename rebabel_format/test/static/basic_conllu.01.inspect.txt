@@ -1,6 +1,8 @@
 sentence
 	UD
 		sent_id: str
+	meta
+		index: int
 
 word
 	UD

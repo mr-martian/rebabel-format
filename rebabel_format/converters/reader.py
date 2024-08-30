@@ -40,6 +40,8 @@ class Reader(metaclass=MetaReader):
         self.filename = None
         self.location = None
 
+        self.block_count = 0
+
         self.type_map = {}
         self.feature_map = {}
 
@@ -198,6 +200,7 @@ class Reader(metaclass=MetaReader):
         else:
             self.all_ids = set()
             self.types = {}
+        self.block_count += 1
 
     def ensure_feature(self, unittype, tier, feature, valuetype):
         key = (unittype, tier, feature)
