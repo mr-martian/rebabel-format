@@ -93,13 +93,14 @@ class Reader(metaclass=MetaReader):
         self._check_name(child_name)
         self.relations[child_name].add(parent_name)
 
-    def set_feature(self, unit_name, tier, feature, ftype, value):
+    def set_feature(self, unit_name, tier, feature, ftype, value,
+                    confidence=None):
         self._check_name(unit_name)
         if ftype == 'ref':
             self._check_name(value)
         else:
             self.db.check_type(ftype, value)
-        self.features[unit_name][(tier, feature, ftype)] = value
+        self.features[unit_name][(tier, feature, ftype)] = (value, confidence)
 
     def finish_block(self, parent_if_missing=None, keep_uids=False):
         parent_type_if_missing = None
@@ -144,7 +145,7 @@ class Reader(metaclass=MetaReader):
         feature_ids = {}
         features = []
         for name in self.id_seq:
-            for (tier, feature, ftype), value in self.features[name].items():
+            for (tier, feature, ftype), (value, conf) in self.features[name].items():
                 m_key = ((tier, feature), self.types[name])
                 n_key = ((tier, feature), None)
                 if m_key in self.feature_map:
@@ -162,9 +163,10 @@ class Reader(metaclass=MetaReader):
                 features.append({
                     'unit': uids[name], 'feature': fid, 'value': value,
                     'user': self.user, 'date': self.db.now(),
+                    'confidence': conf,
                 })
         self.db.cur.executemany(
-            'INSERT INTO features(unit, feature, value, user, date) VALUES(:unit, :feature, :value, :user, :date)',
+            'INSERT INTO features(unit, feature, value, user, date, confidence) VALUES(:unit, :feature, :value, :user, :date, :confidence)',
             features,
         )
         self.features = defaultdict(dict)

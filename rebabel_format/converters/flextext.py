@@ -4,6 +4,14 @@ from .reader import XMLReader
 from .writer import Writer
 from ..config import get_single_param
 
+ANALYSIS_STATUSES = [
+    ('humanApproved', 4),
+    ('guessByHumanApproved', 3),
+    ('guessByStatisticalAnalysis', 2),
+    ('guess', 1),
+]
+
+# TODO: should we record <document version= exportSource= exportTarget=>?
 class FlextextReader(XMLReader):
     '''
     The imported unit types will be `interlinear-text`, `paragraph`, `phrase`,
@@ -19,33 +27,51 @@ class FlextextReader(XMLReader):
     identifier = 'flextext'
     short_name = 'FlexText'
     long_name = 'SIL Fieldworks Language Explorer XML glossed text'
+    format_specification = 'https://github.com/sillsdev/FieldWorks/blob/release/9.1/DistFiles/Language%20Explorer/Export%20Templates/Interlinear/FlexInterlinear.xsd'
 
     def read_file(self, fin):
         self.iter_nodes(fin)
         self.finish_block()
 
     def iter_nodes(self, node, parent=None, idx=0):
-        known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
+        known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph',
+                 'scrMilestone', 'language', 'media']
         if node.tag in known:
             name = node.attrib.get('guid', (parent or '') + ' ' + str(idx))
             self.set_type(name, node.tag)
             if parent:
                 self.set_parent(name, parent)
             self.set_feature(name, 'meta', 'index', 'int', idx)
+            for feat, val in node.attrib.items():
+                typ = 'str'
+                if feat in ['chapter', 'verse']:
+                    typ = 'int'
+                    val = int(val)
+                self.set_feature(name, 'FlexText', feat, typ, val)
             chidx = 0
             for ch in node:
                 if ch.tag == 'item':
                     tier = 'FlexText/'+ch.attrib.get('lang', 'None')
                     feat = ch.attrib.get('type', 'None')
                     val = ch.text or ''
-                    self.set_feature(name, tier, feat, 'str', val)
+                    confidence = None
+                    if 'analysisStatus' in ch.attrib:
+                        confidence = dict(ANANLYSIS_STATUSES).get(
+                            ch.attrib['analysisStatus'], 0)
+                    self.set_feature(name, tier, feat, 'str', val,
+                                     confidence=confidence)
                 else:
                     chidx += 1
                     self.iter_nodes(ch, parent=name, idx=chidx)
         else:
+            for feat, val in node.attrib.items():
+                self.set_feature(parent, 'FlexText', feat, 'str', val)
             for i, ch in enumerate(node, 1):
                 self.iter_nodes(ch, parent=parent, idx=i)
 
+# TODO: export scrMilestone, language, media
+# TODO: confidence → analysisStatus
+# TODO: optionally warn on values that aren't in the list defined by the XSD
 class FlextextWriter(Writer):
     identifier = 'flextext'
 
