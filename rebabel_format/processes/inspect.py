@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import Parameter
+from rebabel_format.process import Process
+from rebabel_format.parameters import Parameter
 from collections import defaultdict
 
 class Inspect(Process):

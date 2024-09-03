@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from ..db import RBBLFile
-from ..config import get_single_param, parse_feature
-from .parameters import Parameter, DBParameter, QueryParameter
+from rebabel_format.db import RBBLFile
+from rebabel_format.config import get_single_param, parse_feature
+from rebabel_format.parameters import Parameter, DBParameter, QueryParameter
 import logging
 
 ALL_PROCESSES = {}
@@ -14,12 +14,12 @@ class MetaProcess(type):
         proc_name = attrs.get('name')
         parameters = {}
         for b in bases:
-            parameters.update(getattr(b, '_parameters', {}))
+            parameters.update(getattr(b, 'parameters', {}))
         for attr, value in attrs.items():
             if isinstance(value, Parameter):
                 parameters[attr] = value
                 del new_attrs[attr]
-        new_attrs['_parameters'] = parameters
+        new_attrs['parameters'] = parameters
         if proc_name:
             new_attrs['logger'] = logging.getLogger('reBabel.'+proc_name)
         ret = super(MetaProcess, cls).__new__(cls, name, bases, new_attrs)
@@ -33,7 +33,7 @@ class Process(metaclass=MetaProcess):
 
     def __init__(self, conf, **kwargs):
         self.conf = conf
-        for name, parser in self._parameters.items():
+        for name, parser in self.parameters.items():
             if name in kwargs:
                 value = parser.process(name, kwargs[name])
             else:
@@ -59,7 +59,7 @@ class Process(metaclass=MetaProcess):
             ret += ': ' + cls.__doc__
         ret = textwrap.wrap(ret)
         ret += ['', 'Parameters:']
-        for name, param in cls._parameters.items():
+        for name, param in cls.parameters.items():
             ret += textwrap.wrap(f'{name}: {param.help_text()}',
                                  initial_indent='  ',
                                  subsequent_indent='    ')
@@ -92,7 +92,7 @@ class SearchProcess(Process):
         pass
 
     def run(self):
-        from ..query import search
+        from rebabel_format.query import search
         self.pre_search()
         for result in search(self.db, self.query):
             self.per_result(result)

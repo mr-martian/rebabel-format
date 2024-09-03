@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from ..config import get_single_param, parse_feature, parse_mappings
+from rebabel_format.config import get_single_param, parse_feature, parse_mappings
 from dataclasses import dataclass
 from typing import Any
 
@@ -49,7 +49,7 @@ class DBParameter(Parameter):
 
     def process(self, name, value):
         val = super().process(name, value)
-        from ..db import RBBLFile
+        from rebabel_format.db import RBBLFile
         return RBBLFile(val)
 
 @dataclass

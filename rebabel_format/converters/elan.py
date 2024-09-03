@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from .reader import XMLReader
+from rebabel_format.reader import XMLReader
 from collections import Counter
 
 class EAFReader(XMLReader):

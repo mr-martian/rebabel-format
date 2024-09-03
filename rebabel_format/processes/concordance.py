@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .process import SearchProcess
-from .parameters import Parameter, FeatureParameter
+from rebabel_format.process import SearchProcess
+from rebabel_format.parameters import Parameter, FeatureParameter
 
 class Concordance(SearchProcess):
     '''Perform a concordance search'''

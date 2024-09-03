@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from .db import RBBLFile, WhereClause
-from .config import parse_feature
-from . import utils
+from rebabel_format.db import RBBLFile, WhereClause
+from rebabel_format.config import parse_feature
+from rebabel_format import utils
 
 from collections import defaultdict
 import re

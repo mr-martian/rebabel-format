@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from ..db import RBBLFile
-from ..config import parse_feature
+from rebabel_format.db import RBBLFile
+from rebabel_format.config import parse_feature
 
 ALL_WRITERS = {}
 
@@ -29,7 +29,7 @@ class Writer(metaclass=MetaWriter):
         self.conf = conf
         if self.query:
             self.pre_query()
-            from ..query import ResultTable
+            from rebabel_format.query import ResultTable
             self.table = ResultTable(self.db, self.query, self.query_order,
                                      type_map=type_map, feat_map=feat_map)
 

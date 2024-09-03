@@ -4,8 +4,13 @@ import glob
 import io
 import os
 import tempfile
-from ..processes.process import ALL_PROCESSES
-from ..config import read_config
+from rebabel_format import load_processes, load_readers, load_writers
+from rebabel_format.process import ALL_PROCESSES
+from rebabel_format.config import read_config
+
+load_processes(False)
+load_readers(False)
+load_writers(False)
 
 class StaticTests(unittest.TestCase):
     '''Run commands and compare the outputs to the files in static/

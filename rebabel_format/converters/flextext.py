@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from .reader import XMLReader
-from .writer import Writer
-from ..config import get_single_param
+from rebabel_format.reader import XMLReader
+from rebabel_format.writer import Writer
+from rebabel_format.config import get_single_param
 
 ANALYSIS_STATUSES = [
     ('humanApproved', 4),

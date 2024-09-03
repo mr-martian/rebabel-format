@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import Parameter, MappingParameter, UsernameParameter
+from rebabel_format.process import Process
+from rebabel_format.parameters import Parameter, MappingParameter, UsernameParameter
 
 class Importer(Process):
     '''Read the contents of one or more files into the database'''
@@ -14,8 +14,7 @@ class Importer(Process):
     mappings = MappingParameter(required=False, help='feature and type remappings')
 
     def run(self):
-        from .. import converters
-        from ..converters.reader import ALL_READERS, ReaderError
+        from rebabel_format.reader import ALL_READERS, ReaderError
         if self.mode not in ALL_READERS:
             raise ValueError(f'Unknown reader {self.mode}.')
         reader = ALL_READERS[self.mode](self.db, self.username)
@@ -38,8 +37,7 @@ class Importer(Process):
 
     @classmethod
     def help_text_epilog(cls):
-        from .. import converters
-        from ..converters.reader import ALL_READERS, ReaderError
+        from rebabel_format.converters.reader import ALL_READERS, ReaderError
         readers = '\n- '.join(sorted(ALL_READERS.keys()))
         return f'''The following readers are available:
 - {readers}

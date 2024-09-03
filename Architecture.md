@@ -13,7 +13,7 @@ The database schema is defined in [`schema.sql`](rebabel_format/schema.sql) and 
 
 ## Processes
 
-Processes are defined in the [`processes`](rebabel_format/processes) directory. To define a new process, create a class which inherits from `Process` ([`process.py`](rebabel_format/processes/process.py)) and has a `name` attribute and import it from [`__init__.py`](rebabel_format/processes/__init__.py) Then the `MetaProcess` metaclass will automatically register it in `ALL_PROCESSES`. Any class attributes whose values are instances of `Parameter` or its subclasses ([`parameters.py`](rebabel_format/processes/parameters.py)) will be replaced by the typechecked values from the configuration file when the process object is instantiated. The `Process` class includes a parameter named `db` which expects a path to a database file and converts it into an `RBBLFile` object ([`db.py`](rebabel_format/db.py)).
+Processes are defined in the [`processes`](rebabel_format/processes) directory. To define a new process, create a class which inherits from `Process` ([`process.py`](rebabel_format/process.py)) and has a `name` attribute. Then the `load_processes` function in [`__init__.py`](rebabel_format/__init__.py) will import it and the `MetaProcess` metaclass will automatically register it in `ALL_PROCESSES`. Any class attributes whose values are instances of `Parameter` or its subclasses ([`parameters.py`](rebabel_format/parameters.py)) will be replaced by the typechecked values from the configuration file when the process object is instantiated. The `Process` class includes a parameter named `db` which expects a path to a database file and converts it into an `RBBLFile` object ([`db.py`](rebabel_format/db.py)).
 
 The main action of a process happens in the `.run()` method, which takes no parameters and should not return anything.
 
@@ -21,9 +21,9 @@ The main action of a process happens in the `.run()` method, which takes no para
 
 Adding data to a database is done with the `import` process ([`importer.py`](rebabel_format/processes/importer.py)) and taking data from a database and outputting it in a particular file format is done with the `export` process ([`export.py`](rebabel_format/processes/export.py)). Both of these make use of classes defined in the [`converters`](rebabel_format/converters) directory.
 
-Similarly to processes, format conversion classes either inherit from `Reader` ([`reader.py`](rebabel_format/converters/reader.py)) for importing or from `Writer` ([`writer.py`](rebabel_format/converters/writer.py)) for exporting, which in turn have the metaclasses `MetaReader` and `MetaWriter`, which register them in `ALL_READERS` and `ALL_WRITERS` based on the value of the `identifier` attribute.
+Similarly to processes, format conversion classes either inherit from `Reader` ([`reader.py`](rebabel_format/reader.py)) for importing or from `Writer` ([`writer.py`](rebabel_format/writer.py)) for exporting, which in turn have the metaclasses `MetaReader` and `MetaWriter`, which register them in `ALL_READERS` and `ALL_WRITERS` based on the value of the `identifier` attribute.
 
-In general, a file in [`converters`](rebabel_format/converters) should contain both a `Reader` class and a `Writer` class, both for the same format, and be imported by [`__init__.py`](rebabel_format/converters/__init__.py).
+In general, a file in [`converters`](rebabel_format/converters) should contain both a `Reader` class and a `Writer` class, both for the same format.
 
 The main action of a `Reader` subclass happens in the `.read_file(file)` method, which is passed the file to be read from. If the reader is inheriting directly from `Reader`, this will be an open file handle (which should not be closed). If the reader inherits from `XMLReader`, it will be an [`ElementTree.Element`](https://docs.python.org/3/library/xml.etree.elementtree.html) instance. Descendants of `JSONReader` will be passed a dictionary.
 
@@ -45,7 +45,7 @@ The [`test`](rebabel_format/test) directory is presently setup for end-to-end te
 
 ## Other Files
 
-- [`__init__.py`](rebabel_format/__init__.py) defines the command-line interface.
+- [`__init__.py`](rebabel_format/__init__.py) defines the command-line interface and some utility functions for importing processes and converters.
 - [`config.py`](rebabel_format/config.py) defines functions for processing configuration files.
 - [`setup.py`](setup.py) and [`setup.cfg`](setup.cfg) define the Python build system and dependencies (which are exclusively backports of modules not found in all versions of the Python standard library).
 - [`.editorconfig`](.editorconfig) specifies [EditorConfig](https://editorconfig.org) formatting instructions. Please ensure that your editor accepts this file.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .reader import LineReader, ReaderError
-from .writer import Writer
+from rebabel_format.reader import LineReader, ReaderError
+from rebabel_format.writer import Writer
 
 class ConnluReader(LineReader):
     '''

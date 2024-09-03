@@ -1,4 +1,4 @@
-from .reader import Reader
+from rebabel_format.reader import Reader
 import os
 
 class TextFabricReader(Reader):

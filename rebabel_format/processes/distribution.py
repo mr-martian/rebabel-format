@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import Parameter, FeatureParameter, QueryParameter
-from ..query import ResultTable
+from rebabel_format.process import Process
+from rebabel_format.parameters import Parameter, FeatureParameter, QueryParameter
+from rebabel_format.query import ResultTable
 from collections import Counter
 
 # TODO: this process seems oddly specific

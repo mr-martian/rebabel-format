@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from ..db import RBBLFile
+from rebabel_format.db import RBBLFile
 import logging
 from collections import defaultdict
 

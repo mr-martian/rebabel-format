@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import Parameter, UsernameParameter
+from rebabel_format.process import Process
+from rebabel_format.parameters import Parameter, UsernameParameter
 
 class Transform(Process):
     name = 'transform'
@@ -10,8 +10,8 @@ class Transform(Process):
     confidence = Parameter(default=1, type=int, help='the confidence value to assign to changes')
 
     def run(self):
-        from ..transform import transform
-        from ..config import get_single_param
+        from rebabel_format.transform import transform
+        from rebabel_format.config import get_single_param
         for rule in self.sequence:
             transform(self.db, get_single_param(self.conf, 'transform', rule),
                       username=self.user, confidence=self.confidence)

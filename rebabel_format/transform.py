@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from .db import RBBLFile
-from .config import parse_feature
-from .query import search
+from rebabel_format.db import RBBLFile
+from rebabel_format.config import parse_feature
+from rebabel_format.query import search
 
 from collections import defaultdict
 import re

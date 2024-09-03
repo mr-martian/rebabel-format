@@ -1,4 +1,4 @@
-from .reader import XMLReader
+from rebabel_format.reader import XMLReader
 
 class MaculaNodeReader(XMLReader):
     '''

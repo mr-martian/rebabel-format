@@ -1,4 +1,4 @@
-from .reader import LineReader
+from rebabel_format.reader import LineReader
 import re
 
 class SFMReader(LineReader):

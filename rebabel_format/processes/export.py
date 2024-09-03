@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import Parameter, MappingParameter
+from rebabel_format.process import Process
+from rebabel_format.parameters import Parameter, MappingParameter
 
 class Export(Process):
     '''Output the contents of the database in a particular format'''
@@ -12,8 +12,7 @@ class Export(Process):
     mappings = MappingParameter(required=False, help='feature and type remappings')
 
     def run(self):
-        from .. import converters
-        from ..converters.writer import ALL_WRITERS
+        from rebabel_format.writer import ALL_WRITERS
         if self.mode not in ALL_WRITERS:
             raise ValueError(f'Unknown writer {self.mode}.')
         writer = ALL_WRITERS[self.mode](self.db, self.conf,

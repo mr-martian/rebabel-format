@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from .process import Process
-from .parameters import QueryParameter
-from .. import utils
+from rebabel_format.process import Process
+from rebabel_format.parameters import QueryParameter
+from rebabel_format import utils
 
 class Search(Process):
     '''Find instances of a pattern in the corpus'''
@@ -19,9 +19,9 @@ class Search(Process):
             print('\t'+lab.ljust(self.lab_width+3)+'\t'+v)
 
     def run(self):
-        from ..config import parse_feature
+        from rebabel_format.config import parse_feature
         from collections import defaultdict
-        from ..query import search
+        from rebabel_format.query import search
         self.print_feats = defaultdict(list)
         self.lab_width = 0
         for name, item in self.query.items():
