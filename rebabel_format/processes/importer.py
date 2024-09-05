@@ -17,7 +17,8 @@ class Importer(Process):
         from rebabel_format.reader import ALL_READERS, ReaderError
         if self.mode not in ALL_READERS:
             raise ValueError(f'Unknown reader {self.mode}.')
-        reader = ALL_READERS[self.mode](self.db, self.username)
+        reader = ALL_READERS[self.mode](self.db, self.username,
+                                        self.conf, self.other_args)
         reader.set_mappings(*self.mappings)
         import time
         fnames = self.infiles

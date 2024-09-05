@@ -2,6 +2,7 @@
 
 from rebabel_format.db import RBBLFile
 from rebabel_format.config import parse_feature
+from rebabel_format.parameters import Parameter
 
 ALL_WRITERS = {}
 
@@ -12,9 +13,16 @@ class MetaWriter(type):
         ident = attrs.get('identifier')
         if ident in ALL_WRITERS:
             raise ValueError(f'Identifier {ident} is already used by another writer class.')
-        for a, v in attrs.items():
-            if a in ['identifier']:
-                del new_attrs[a]
+
+        parameters = {}
+        for b in bases:
+            parameters.update(getattr(b, 'parameters', {}))
+        for attr, value in attrs.items():
+            if isinstance(value, Parameter):
+                parameters[attr] = value
+                del new_attrs[attr]
+        new_attrs['parameters'] = parameters
+
         ret = super(MetaWriter, cls).__new__(cls, name, bases, new_attrs)
         if ident is not None:
             ALL_WRITERS[ident] = ret
@@ -24,9 +32,16 @@ class Writer(metaclass=MetaWriter):
     query = {}
     query_order = []
 
-    def __init__(self, db, conf, type_map=None, feat_map=None):
+    def __init__(self, db, type_map, feat_map, conf, kwargs):
         self.db = db
         self.conf = conf
+        self.other_args = kwargs
+        for name, parser in self.parameters.items():
+            if name in kwargs:
+                value = parser.process(name, kwargs[name])
+            else:
+                value = parser.extract(conf, 'export', name)
+            setattr(self, name, value)
         if self.query:
             self.pre_query()
             from rebabel_format.query import ResultTable

@@ -15,8 +15,8 @@ class Export(Process):
         from rebabel_format.writer import ALL_WRITERS
         if self.mode not in ALL_WRITERS:
             raise ValueError(f'Unknown writer {self.mode}.')
-        writer = ALL_WRITERS[self.mode](self.db, self.conf,
-                                        type_map=self.mappings[0],
-                                        feat_map=self.mappings[1])
+        writer = ALL_WRITERS[self.mode](self.db,
+                                        self.mappings[0], self.mappings[1],
+                                        self.conf, self.other_args)
         with open(self.outfile, 'w') as fout:
             writer.write(fout)

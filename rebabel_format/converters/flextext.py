@@ -2,7 +2,7 @@
 
 from rebabel_format.reader import XMLReader
 from rebabel_format.writer import Writer
-from rebabel_format.config import get_single_param
+from rebabel_format.parameters import Parameter
 
 ANALYSIS_STATUSES = [
     ('humanApproved', 4),
@@ -75,6 +75,9 @@ class FlextextReader(XMLReader):
 class FlextextWriter(Writer):
     identifier = 'flextext'
 
+    root = Parameter(type=str, default='interlinear-text', required=False)
+    skip = Parameter(type=list, required=False)
+
     query_order = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph']
     query = {
         'interlinear-text': {
@@ -120,16 +123,15 @@ class FlextextWriter(Writer):
                 del self.query[next_layer]['parent']
 
     def pre_query(self):
-        top_layer = get_single_param(self.conf, 'export', 'root')
-        if top_layer is not None:
+        if self.root is not None:
             for i, layer in enumerate(self.query_order):
-                if layer == top_layer:
+                if layer == self.root:
                     break
                 else:
                     self.rem_layer(layer)
             else:
                 raise ValueError(f"Unknown value for 'root' in flextext export '{top_layer}'.")
-        for layer in get_single_param(self.conf, 'export', 'skip'):
+        for layer in (self.skip or []):
             self.rem_layer(layer)
 
     def indent(self, node, depth):

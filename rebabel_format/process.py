@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.config import get_single_param, parse_feature
+from rebabel_format.config import parse_feature
 from rebabel_format.parameters import Parameter, DBParameter, QueryParameter
 import logging
 
@@ -33,6 +33,7 @@ class Process(metaclass=MetaProcess):
 
     def __init__(self, conf, **kwargs):
         self.conf = conf
+        self.other_args = kwargs
         for name, parser in self.parameters.items():
             if name in kwargs:
                 value = parser.process(name, kwargs[name])

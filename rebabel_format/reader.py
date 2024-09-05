@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
+from rebabel_format.parameters import Parameter
 import logging
 from collections import defaultdict
 
@@ -18,15 +19,34 @@ class MetaReader(type):
             raise ValueError(f'Identifier {ident} is already used by another reader class.')
         if ident:
             new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
+
+        parameters = {}
+        for b in bases:
+            parameters.update(getattr(b, 'parameters', {}))
+        for attr, value in attrs.items():
+            if isinstance(value, Parameter):
+                parameters[attr] = value
+                del new_attrs[attr]
+        new_attrs['parameters'] = parameters
+
         ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
         if ident is not None:
             ALL_READERS[ident] = ret
         return ret
 
 class Reader(metaclass=MetaReader):
-    def __init__(self, db, user):
+    def __init__(self, db, user, conf, kwargs):
         self.db = db
         self.user = user
+
+        self.conf = conf
+        self.other_args = kwargs
+        for name, parser in self.parameters.items():
+            if name in kwargs:
+                value = parser.process(name, kwargs[name])
+            else:
+                value = parser.extract(conf, 'import', name)
+            setattr(self, name, value)
 
         self.known_feats = {}
         self.uids = {}
