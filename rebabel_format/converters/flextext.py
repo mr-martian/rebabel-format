@@ -64,8 +64,9 @@ class FlextextReader(XMLReader):
                     chidx += 1
                     self.iter_nodes(ch, parent=name, idx=chidx)
         else:
-            for feat, val in node.attrib.items():
-                self.set_feature(parent, 'FlexText', feat, 'str', val)
+            if parent is not None:
+                for feat, val in node.attrib.items():
+                    self.set_feature(parent, 'FlexText', feat, 'str', val)
             for i, ch in enumerate(node, 1):
                 self.iter_nodes(ch, parent=parent, idx=i)
 
