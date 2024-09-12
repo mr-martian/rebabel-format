@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<document version="2">
+  <interlinear-text>
+    <paragraphs>
+      <paragraph>
+        <phrases>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="pos">DET</item>
+                <item lang="en" type="txt">the</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">NOUN</item>
+                <item lang="en" type="txt">man</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">VERB</item>
+                <item lang="en" type="txt">snore</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">PUNCT</item>
+                <item lang="en" type="txt">.</item>
+              </word>
+            </words>
+          </phrase>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="pos">DET</item>
+                <item lang="en" type="txt">the</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">NOUN</item>
+                <item lang="en" type="txt">woman</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">VERB</item>
+                <item lang="en" type="txt">sing</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">PUNCT</item>
+                <item lang="en" type="txt">.</item>
+              </word>
+            </words>
+          </phrase>
+        </phrases>
+      </paragraph>
+    </paragraphs>
+  </interlinear-text>
+</document>
