@@ -1,0 +1,9 @@
+1 The↑DET
+2 dog↑NOUN
+3 barks↑VERB
+4 .↑PUNC
+
+5 The↑DET
+6 cat↑NOUN
+7 meows↑VERB
+8 .↑PUNC
