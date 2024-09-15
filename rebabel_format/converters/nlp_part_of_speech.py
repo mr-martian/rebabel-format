@@ -17,9 +17,11 @@ class NLPPartOfSpeechReader(LineReader):
     identifier = "nlp_pos"
 
     def reset(self):
+        """placeholder docstring"""
         self.word_idx = 0
 
     def end(self):
+        """placeholder docstring"""
         if self.id_seq:
             self.set_type("sentence", "sentence")
             self.set_feature("sentence", "meta", "index", "int", self.block_count)
