@@ -8,10 +8,10 @@ class NLPPartOfSpeechReader(LineReader):
 
     Example file structure:
 
-    1 The↑DET
-    2 dog↑NOUN
-    3 barked↑VERB
-    4 .↑PUNC
+    1 The/DET
+    2 dog/NOUN
+    3 barked/VERB
+    4 ./PUNC
     """
 
     identifier = "nlp_pos"
@@ -31,12 +31,12 @@ class NLPPartOfSpeechReader(LineReader):
         """Process one word, part of speech pair at a time.
 
         Positional arguments:
-        line -- a word and its part of speech separated by the ↑ delimiter (ex: jumped↑VERB)
+        line -- a word and its part of speech separated by the / delimiter (ex: jumped↑VERB)
         """
         split_line = line.strip().split(" ")
 
         line_number = split_line[0]
-        word, part_of_speech = split_line[1].split("↑")
+        word, part_of_speech = split_line[1].split("/")
 
         self.set_type(line_number, "word")
         self.set_parent(line_number, "sentence")
