@@ -32,7 +32,8 @@ class Writer(metaclass=MetaWriter):
     query = {}
     query_order = []
 
-    def __init__(self, db, type_map, feat_map, conf, kwargs):
+    def __init__(self, db, type_map, feat_map, conf, kwargs,
+                 query_updates=None):
         self.db = db
         self.conf = conf
         self.other_args = kwargs
@@ -44,6 +45,10 @@ class Writer(metaclass=MetaWriter):
             setattr(self, name, value)
         if self.query:
             self.pre_query()
+            if query_updates:
+                for k, v in query_updates.items():
+                    if k in self.query:
+                        self.query[k].update(v)
             from rebabel_format.query import ResultTable
             self.table = ResultTable(self.db, self.query, self.query_order,
                                      type_map=type_map, feat_map=feat_map)
