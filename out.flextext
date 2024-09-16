@@ -8,18 +8,18 @@
             <words>
               <word>
                 <item lang="en" type="pos">DET</item>
-                <item lang="en" type="txt">the</item>
+                <item lang="en" type="txt">The</item>
               </word>
               <word>
                 <item lang="en" type="pos">NOUN</item>
-                <item lang="en" type="txt">man</item>
+                <item lang="en" type="txt">dog</item>
               </word>
               <word>
                 <item lang="en" type="pos">VERB</item>
-                <item lang="en" type="txt">snore</item>
+                <item lang="en" type="txt">barks</item>
               </word>
               <word>
-                <item lang="en" type="pos">PUNCT</item>
+                <item lang="en" type="pos">PUNC</item>
                 <item lang="en" type="txt">.</item>
               </word>
             </words>
@@ -28,18 +28,18 @@
             <words>
               <word>
                 <item lang="en" type="pos">DET</item>
-                <item lang="en" type="txt">the</item>
+                <item lang="en" type="txt">The</item>
               </word>
               <word>
                 <item lang="en" type="pos">NOUN</item>
-                <item lang="en" type="txt">woman</item>
+                <item lang="en" type="txt">cat</item>
               </word>
               <word>
                 <item lang="en" type="pos">VERB</item>
-                <item lang="en" type="txt">sing</item>
+                <item lang="en" type="txt">meows</item>
               </word>
               <word>
-                <item lang="en" type="pos">PUNCT</item>
+                <item lang="en" type="pos">PUNC</item>
                 <item lang="en" type="txt">.</item>
               </word>
             </words>
