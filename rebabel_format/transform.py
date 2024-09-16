@@ -14,3 +14,9 @@ def transform(db, trans, username='user', confidence=1):
                 db.set_feature(match[cmd['target']], cmd['tier'],
                                cmd['feature'], cmd['value'], user=username,
                                confidence=confidence)
+            elif cmd['type'] == 'create_unit':
+                uid = db.create_unit(cmd['unit_type'], user=username)
+                match[cmd.get('unit_name')] = uid
+            elif cmd['type'] == 'create_feature':
+                db.create_feature(cmd['unit_type'], cmd['tier'], cmd['feature'],
+                                  cmd['value_type'])
