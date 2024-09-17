@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from rebabel_format.parameters import Parameter
 from rebabel_format.reader import LineReader
 
 
@@ -35,7 +36,7 @@ class NLPPartOfSpeechReader(LineReader):
         line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
         split_line = line.strip().split(" ")
-        delimiter = "/"
+        delimiter = Parameter(default="/", type=str)
         if "delimiter" in self.other_args:
             delimiter = self.other_args["delimiter"]
 
