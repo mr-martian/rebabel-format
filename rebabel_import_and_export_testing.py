@@ -11,6 +11,7 @@ rebabel_format.run_command(
     mode="nlp_pos",
     db="temp.db",
     infiles=["nlp_pos.txt"],
+    delimiter="/"
 )
 
 rebabel_format.run_command(

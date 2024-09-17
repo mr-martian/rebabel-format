@@ -4,14 +4,15 @@ from rebabel_format.reader import LineReader
 
 
 class NLPPartOfSpeechReader(LineReader):
-    """Read in a text file consisting of lines with a line number and a single word and its part of speech, separated by the / delimiter.
+    """Read in a text file.
+    Each line consists of a single sentence made up of words tagged with their parts of speech.
+    Each word is separated from its part of speech by a delimiter, by default "/".
+    The words are separated from each other by spaces.
 
     Example file structure:
 
-    1 The/DET
-    2 dog/NOUN
-    3 barked/VERB
-    4 ./PUNC
+    The/DET dog/NOUN barked/VERB ./PUNC
+    The/DET cat/NOUN meowed/VERB ./PUNC
     """
 
     identifier = "nlp_pos"
@@ -31,12 +32,15 @@ class NLPPartOfSpeechReader(LineReader):
         """Process one word, part of speech pair at a time.
 
         Positional arguments:
-        line -- a word and its part of speech separated by the / delimiter (ex: jumped/VERB)
+        line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
-        split_line = line.strip().split(" ")[1:]
+        split_line = line.strip().split(" ")
+        delimiter = "/"
+        if "delimiter" in self.other_args:
+            delimiter = self.other_args["delimiter"]
 
         for index, word_part_of_speech_pair in enumerate(split_line):
-            word, part_of_speech = word_part_of_speech_pair.split("/")
+            word, part_of_speech = word_part_of_speech_pair.split(delimiter)
 
             index_as_string = str(index + 1)
 
