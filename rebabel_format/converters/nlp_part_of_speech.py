@@ -18,6 +18,13 @@ class NLPPartOfSpeechReader(LineReader):
 
     identifier = "nlp_pos"
 
+    def __init__(self, db, user, conf, kwargs):
+        super().__init__(db, user, conf, kwargs)
+        self.delimiter = Parameter(default="/", type=str)
+        if "delimiter" in self.other_args:
+            self.delimiter = self.other_args["delimiter"]
+        self.word_idx = 0
+
     def reset(self):
         """placeholder docstring"""
         self.word_idx = 0
@@ -36,12 +43,9 @@ class NLPPartOfSpeechReader(LineReader):
         line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
         split_line = line.strip().split(" ")
-        delimiter = Parameter(default="/", type=str)
-        if "delimiter" in self.other_args:
-            delimiter = self.other_args["delimiter"]
 
         for index, word_part_of_speech_pair in enumerate(split_line):
-            word, part_of_speech = word_part_of_speech_pair.split(delimiter)
+            word, part_of_speech = word_part_of_speech_pair.split(self.delimiter)
 
             index_as_string = str(index + 1)
 
