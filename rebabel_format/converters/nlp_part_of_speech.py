@@ -37,8 +37,6 @@ class NLPPartOfSpeechReader(LineReader):
         line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
         split_line = line.strip().split(" ")
-        if "delimiter" in self.other_args:
-            self.delimiter = self.other_args["delimiter"]
 
         for index, word_part_of_speech_pair in enumerate(split_line):
             word, part_of_speech = word_part_of_speech_pair.split(self.delimiter)
