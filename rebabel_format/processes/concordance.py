@@ -16,7 +16,7 @@ class Concordance(SearchProcess):
                       help='features of units from the query to label each output line with')
     print = FeatureParameter(help='feature to display for units in the concordance window')
 
-    @lru_cache
+    @lru_cache(maxsize=100)
     def get_children(db, uid, child_type):
         return db.get_units(child_type, parent=uid)
 
