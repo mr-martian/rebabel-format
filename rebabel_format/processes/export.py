@@ -20,5 +20,5 @@ class Export(Process):
                                         self.mappings[0], self.mappings[1],
                                         self.conf, self.other_args,
                                         query_updates=self.query_updates)
-        with open(self.outfile, 'w', encoding='utf-8') as fout:
+        with open(self.outfile, 'w', encoding='UTF-8') as fout:
             writer.write(fout)
