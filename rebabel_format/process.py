@@ -78,7 +78,7 @@ class SearchProcess(Process):
         fid, vtype = self.db.get_feature(utype, spec['tier'], spec['feature'])
         return self.db.get_feature_value(uid, fid)
 
-    def print_label(self, result):
+    def print_label(self, result, labels):
         for i, label in enumerate(labels):
             print(self.get_value(result, label),
                   end=(': ' if i+1 == len(labels) else ' '))

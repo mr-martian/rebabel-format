@@ -1,7 +1,51 @@
 #!/usr/bin/env python3
 
 from rebabel_format.reader import XMLReader
+from rebabel_format.writer import Writer
+from rebabel_format.parameters import Parameter
+from rebabel_format import utils
+
 from collections import Counter
+from dataclasses import dataclass
+from xml.etree import ElementTree as ET
+
+@dataclass
+class ELANTier:
+    name: str
+    parent: str = None
+    relation: str = None
+    aligned: bool = False
+    node: ET.Element = None
+
+def get_tier_structure(root):
+    ling_type = {}
+    for type_node in root.findall('LINGUISTIC_TYPE'):
+        attr = type_node.attrib
+        ling_type[attr.get('LINGUISTIC_TYPE_ID')] = (
+            attr.get('CONSTRAINTS'), (attr.get('TIME_ALIGNABLE') == 'true'))
+    tiers = {}
+    for tier_node in root.findall('TIER'):
+        attr = tier_node.attrib
+        name = attr.get('TIER_ID')
+        obj = ELANTier(name)
+        obj.parent = attr.get('PARENT_REF')
+        obj.relation, obj.aligned = ling_type.get(
+            attr.get('LINGUISTIC_TYPE_REF'))
+        obj.node = tier_node
+        tiers[name] = obj
+    order = []
+    done = {None}
+    todo = sorted(tiers.keys())
+    while todo:
+        next_todo = []
+        for t in todo:
+            if tiers[t].parent in done:
+                order.append(t)
+                done.add(t)
+            else:
+                next_todo.append(t)
+        todo = next_todo
+    return tiers, order
 
 class EAFReader(XMLReader):
     '''
@@ -26,34 +70,12 @@ class EAFReader(XMLReader):
         self.names = {}
         self.times = {}
         self.time_ranges = {} # tier ID -> (start, end) -> annotation id
-        tiers = {} # tier ID -> XML node
-        tier_wait = {} # tier ID -> (tier ID)
-        ling_type = {} # type ID -> constraint name
-        tier_type = {}
         for tm in root.findall('TIME_SLOT'):
             v = int(tm.attrib.get('TIME_VALUE', '-1'))
             self.times[tm.attrib.get('TIME_SLOT_ID')] = v
-        for type_node in root.findall('LINGUISTIC_TYPE'):
-            i = type_node.attrib.get('LINGUISTIC_TYPE_ID')
-            ling_type[i] = type_node.attrib.get('CONSTRAINTS')
-        for tier_node in root.findall('TIER'):
-            i = tier_node.attrib.get('TIER_ID')
-            tiers[i] = tier_node
-            t = tier_node.attrib.get('LINGUISTIC_TYPE_REF')
-            tier_wait[i] = tier_node.attrib.get('PARENT_REF')
-            tier_type[i] = ling_type.get(t)
-        todo = sorted(tiers.keys())
-        done = set()
-        done.add(None)
-        while len(todo) > 0:
-            next_todo = []
-            for t in todo:
-                if tier_wait[t] in done:
-                    self.process_tier(t, tiers[t], tier_type[t])
-                    done.add(t)
-                else:
-                    next_todo.append(t)
-            todo = next_todo
+        tiers, order = get_tier_structure(root)
+        for t in order:
+            self.process_tier(t, tiers[t].node, tiers[t].relation)
         self.finish_block()
 
     def annotation_text(self, node):
@@ -107,3 +129,113 @@ class EAFReader(XMLReader):
                     self.set_feature(i, 'alignment', 'endtime', 'int', e)
                     if t is not None:
                         self.set_feature(i, 'ELAN', tier_name, 'str', t)
+
+class EAFWriter(Writer):
+    identifier = 'elan'
+
+    query = True
+
+    template_file = Parameter(type=str, required=True)
+    seconds = Parameter(type=bool, default=False, help='interpret time offsets as seconds rather than miliseconds')
+
+    def pre_query(self):
+        self.tree = ET.parse(self.template_file).getroot()
+        self.tiers, order = get_tier_structure(self.tree)
+        self.query = {}
+        self.query_order = []
+        for tier_name in order:
+            tier = self.tiers[tier_name]
+            while len(tier.node) > 0:
+                tier.node.remove(tier.node[0])
+            if not tier.parent or tier.relation != 'Symbolic_Association':
+                self.query_order.append(tier_name)
+                self.query[tier.name] = {
+                    'type': tier.name,
+                    'parent': tier.parent,
+                    'order': 'alignment:starttime' if tier.aligned else 'alignment:index',
+                }
+
+    def write(self, fout):
+        feat_ids = {}
+        for name in self.query_order:
+            main = ['ELAN:'+name]
+            if self.tiers[name].aligned:
+                main += ['alignment:starttime', 'alignment:endtime']
+            mids = self.table.add_features(name, main, error=False)
+            feats = []
+            for tier in self.tiers.values():
+                if tier.parent == name and tier.relation == 'Symbolic_Association':
+                    feats.append('ELAN:'+tier.name)
+            fids = self.table.add_features(name, feats, error=False)
+            feat_ids[name] = dict(zip(main, mids)), list(zip(feats, fids))
+        parent_annotations = {}
+        times = {0}
+        ann_count = 0
+        for nodes, result_feats in self.table.results():
+            for name in self.query_order:
+                for uid in utils.as_list(nodes.get(name)):
+                    if uid in parent_annotations or uid is None:
+                        continue
+                    feat_values = result_feats[uid]
+                    main, feats = feat_ids[name]
+                    ann_count += 1
+                    ann_id = f'ann{ann_count}'
+                    parent_annotations[uid] = ann_id
+
+                    ann1 = ET.SubElement(self.tiers[name].node, 'ANNOTATION')
+                    if self.tiers[name].aligned:
+                        start = feat_values.get(main.get('alignment:starttime'))
+                        end = feat_values.get(main.get('alignment:endtime'))
+                        if start is None:
+                            if not end:
+                                start = max(times)
+                                end = start + 1
+                            else:
+                                start = end - 1
+                        elif end is None:
+                            end = start + 1
+                        times.add(start)
+                        times.add(end)
+                        ann2 = ET.SubElement(ann1, 'ALIGNABLE_ANNOTATION',
+                                             ANNOTATION_ID=ann_id,
+                                             TIME_SLOT_REF1=f'ts{start}',
+                                             TIME_SLOT_REF2=f'ts{end}')
+                    else:
+                        ann2 = ET.SubElement(ann1, 'REF_ANNOTATION',
+                                             ANNOTATION_ID=ann_id)
+                        pid = nodes.get(self.tiers[name].parent)
+                        if pid and pid in parent_annotations:
+                            pref = parent_annotations[pid]
+                            ann2.attrib['ANNOTATION_REF'] = pref
+                            if len(self.tiers[name].node) > 1:
+                                prev = self.tiers[name].node[-2]
+                                if prev[0].attrib['ANNOTATION_REF'] == pref:
+                                    ann2.attrib['PREVIOUS_ANNOTATION'] = prev[0].attrib['ANNOTATION_ID']
+                    ann3 = ET.SubElement(ann2, 'ANNOTATION_VALUE')
+                    content = feat_values.get(main.get('ELAN:'+name))
+                    if content is not None:
+                        ann3.text = str(content)
+
+                    for feat, fid in feats:
+                        value = feat_values.get(fid)
+                        if value is None:
+                            continue
+                        feat_name = feat[5:]
+                        ann1 = ET.SubElement(self.tiers[feat_name].node,
+                                             'ANNOTATION')
+                        ann_count += 1
+                        ann2 = ET.SubElement(ann1, 'REF_ANNOTATION',
+                                             ANNOTATION_ID=f'ann{ann_count}',
+                                             ANNOTATION_REF=ann_id)
+                        ann3 = ET.SubElement(ann2, 'ANNOTATION_VALUE')
+                        ann3.text = str(value)
+
+        time_node = self.tree.find('TIME_ORDER')
+        time_node.clear()
+        time_node.tail = '\n'
+        for tm in sorted(times):
+            val = str(tm*1000) if self.seconds else str(tm)
+            ET.SubElement(time_node, 'TIME_SLOT', TIME_SLOT_ID=f'ts{tm}',
+                          TIME_VALUE=val)
+        tree = ET.ElementTree(self.tree)
+        tree.write(fout, encoding='unicode', xml_declaration=True)

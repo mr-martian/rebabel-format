@@ -34,3 +34,15 @@ value = 'ninja'
 
 [export]
 mode = 'conllu'
+
+[concordance]
+label = [{unit = 'S', tier = 'UD', feature = 'sent_id'}]
+print = 'UD:upos'
+
+[concordance.query.Center]
+type = 'word'
+features = [{tier = 'UD', feature = 'lemma', value = '.'}]
+parent = 'S'
+
+[concordance.query.S]
+type = 'sentence'
