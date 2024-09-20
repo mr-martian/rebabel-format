@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 
+from rebabel_format.parameters import Parameter
 from rebabel_format.reader import LineReader
 
 
 class NLPPartOfSpeechReader(LineReader):
-    """Read in a text file consisting of lines with a line number and a single word and its part of speech, separated by the ↑ delimiter.
+    """Read in a text file.
+    Each line consists of a single sentence made up of words tagged with their parts of speech.
+    Each word is separated from its part of speech by a delimiter, by default "/".
+    The words are separated from each other by spaces.
 
     Example file structure:
 
-    1 The/DET
-    2 dog/NOUN
-    3 barked/VERB
-    4 ./PUNC
+    The/DET dog/NOUN barked/VERB ./PUNC
+    The/DET cat/NOUN meowed/VERB ./PUNC
     """
 
     identifier = "nlp_pos"
+    delimiter = Parameter(default="/", type=str)
 
     def reset(self):
         """placeholder docstring"""
@@ -31,19 +34,21 @@ class NLPPartOfSpeechReader(LineReader):
         """Process one word, part of speech pair at a time.
 
         Positional arguments:
-        line -- a word and its part of speech separated by the / delimiter (ex: jumped↑VERB)
+        line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
         split_line = line.strip().split(" ")
 
-        line_number = split_line[0]
-        word, part_of_speech = split_line[1].split("/")
+        for index, word_part_of_speech_pair in enumerate(split_line):
+            word, part_of_speech = word_part_of_speech_pair.split(self.delimiter)
 
-        self.set_type(line_number, "word")
-        self.set_parent(line_number, "sentence")
-        self.set_feature(line_number, "UD", "id", "str", line_number)
+            index_as_string = str(index + 1)
 
-        self.word_idx += 1
+            self.set_type(index_as_string, "word")
+            self.set_parent(index_as_string, "sentence")
+            self.set_feature(index_as_string, "UD", "id", "str", index_as_string)
 
-        self.set_feature(line_number, "meta", "index", "int", self.word_idx)
-        self.set_feature(line_number, "UD", "form", "str", word)
-        self.set_feature(line_number, "UD", "upos", "str", part_of_speech)
+            self.word_idx += 1
+
+            self.set_feature(index_as_string, "meta", "index", "int", self.word_idx)
+            self.set_feature(index_as_string, "UD", "form", "str", word)
+            self.set_feature(index_as_string, "UD", "upos", "str", part_of_speech)
