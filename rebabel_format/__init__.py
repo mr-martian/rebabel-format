@@ -159,7 +159,4 @@ run `rebabel-format help [ACTION]` for a longer description.'''
             load_writers(True)
         conf = config.read_config(args.config)
         logging.basicConfig(level=args.log_level)
-        import cProfile
-        with cProfile.Profile() as pr:
-            run_command(args.action, conf)
-            pr.dump_stats('/tmp/stats.prof')
+        run_command(args.action, conf)
