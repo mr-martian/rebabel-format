@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.process import SearchProcess
-from rebabel_format.parameters import Parameter, FeatureParameter
+from rebabel_format.parameters import Parameter
 
 from functools import lru_cache
 
@@ -14,7 +14,7 @@ class Concordance(SearchProcess):
     width = Parameter(default=2, help='width of concordance window')
     label = Parameter(type=list,
                       help='features of units from the query to label each output line with')
-    print = FeatureParameter(help='feature to display for units in the concordance window')
+    print = Parameter(type=str, help='feature to display for units in the concordance window')
 
     @lru_cache(maxsize=100)
     def get_children(db, uid, child_type):
@@ -22,7 +22,7 @@ class Concordance(SearchProcess):
 
     def get_child_bound(self, uid, child_type, bound, right):
         children = Concordance.get_children(self.db, uid, child_type)
-        fid, ftype = self.db.get_feature(child_type, 'meta', 'index')
+        fid, ftype = self.db.get_feature(child_type, 'meta:index')
         idx = self.db.get_feature_values(children, fid)
         children.sort(key=lambda c: idx.get(c, bound))
         if right:
@@ -48,7 +48,7 @@ class Concordance(SearchProcess):
         if uid is None:
             return None
         utype = self.db.get_unit_type(uid)
-        fid, ftype = self.db.get_feature(utype, 'meta', 'index')
+        fid, ftype = self.db.get_feature(utype, 'meta:index')
         idx = self.db.get_feature_value(uid, fid)
         parent = self.db.get_parent(uid)
         if parent is None:
@@ -73,7 +73,7 @@ class Concordance(SearchProcess):
 
     def print_span(self, span):
         utype = self.db.get_unit_type(span[0])
-        fid, ftype = self.db.get_feature(utype, *self.print)
+        fid, ftype = self.db.get_feature(utype, self.print)
         print(' '.join(str(self.db.get_feature_value(u, fid)) for u in span))
 
     def per_result(self, result):

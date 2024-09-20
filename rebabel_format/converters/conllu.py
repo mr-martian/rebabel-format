@@ -50,8 +50,7 @@ class ConnluReader(LineReader):
     def end(self):
         if self.id_seq:
             self.set_type('sentence', 'sentence')
-            self.set_feature('sentence', 'meta', 'index', 'int',
-                             self.block_count)
+            self.set_feature('sentence', 'meta:index', 'int', self.block_count)
         super().end()
 
     def process_line(self, line):
@@ -61,7 +60,7 @@ class ConnluReader(LineReader):
         if line[0] == '#':
             if '=' in line:
                 k, v = line[1:].split('=', 1)
-                self.set_feature('sentence', 'UD', k.strip(), 'str', v.strip())
+                self.set_feature('sentence', 'UD:'+k.strip(), 'str', v.strip())
             return
 
         columns = line.strip().split('\t')
@@ -72,20 +71,20 @@ class ConnluReader(LineReader):
         is_token = '-' in name
         self.set_type(name, 'token' if is_token else 'word')
         self.set_parent(name, 'sentence')
-        self.set_feature(name, 'UD', 'id', 'str', name)
+        self.set_feature(name, 'UD:id', 'str', name)
         if is_token:
             self.token_idx += 1
-            self.set_feature(name, 'meta', 'index', 'int', self.token_idx)
+            self.set_feature(name, 'meta:index', 'int', self.token_idx)
             a, b = name.split('-', 1)
             if a.isdigit() and b.isdigit():
                 for ch in range(int(a), int(b)+1):
                     self.add_relation(str(ch), name)
         else:
             self.word_idx += 1
-            self.set_feature(name, 'meta', 'index', 'int', self.word_idx)
-            self.set_feature(name, 'UD', 'null', 'bool', '.' in name)
+            self.set_feature(name, 'meta:index', 'int', self.word_idx)
+            self.set_feature(name, 'UD:null', 'bool', '.' in name)
 
-        for group, val in [('UD/FEATS', columns[5]), ('UD/MISC', columns[9])]:
+        for group, val in [('UD:FEATS:', columns[5]), ('UD:MISC:', columns[9])]:
             if val == '_':
                 continue
             for pair in val.split('|'):
@@ -96,7 +95,7 @@ class ConnluReader(LineReader):
                 if k == 'SpaceAfter':
                     typ = 'bool'
                     v = (v != 'No')
-                self.set_feature(name, group, k, typ, v)
+                self.set_feature(name, group+k, typ, v)
 
         col_names = [('form', 1), ('lemma', 2), ('upos', 3), ('xpos', 4),
                      ('head', 6), ('deprel', 7)]
@@ -107,7 +106,7 @@ class ConnluReader(LineReader):
                     if columns[col] == '0':
                         continue
                     typ = 'ref'
-                self.set_feature(name, 'UD', feat, typ, columns[col])
+                self.set_feature(name, 'UD:'+feat, typ, columns[col])
 
         if columns[8] != '_':
             for pair in columns[8].split('|'):
@@ -118,9 +117,9 @@ class ConnluReader(LineReader):
                 self.set_type(ename, 'UD-edep')
                 self.set_parent(ename, 'sentence')
                 head, rel = pair.split(':', 1)
-                self.set_feature(ename, 'UD', 'parent', 'ref', h)
-                self.set_feature(ename, 'UD', 'child', 'ref', name)
-                self.set_feature(ename, 'UD', 'deprel', 'str', rel)
+                self.set_feature(ename, 'UD:parent', 'ref', h)
+                self.set_feature(ename, 'UD:child', 'ref', name)
+                self.set_feature(ename, 'UD:deprel', 'str', rel)
 
 class ConlluWriter(Writer):
     identifier = 'conllu'
@@ -141,10 +140,10 @@ class ConlluWriter(Writer):
         feat2col = {'form': 1, 'lemma': 2, 'upos': 3, 'xpos': 4, 'deprel': 7}
         sent_feats = self.table.add_tier('sentence', 'UD', prefix=False)
         word_feats = self.table.add_tier('word', 'UD', prefix=True)
-        sent_id = sent_feats.get(('UD', 'sent_id'))
-        sent_feat_ids = sorted([(f, i) for (t, f), i in sent_feats.items()
-                                if f != 'sent_id'])
-        word_feat_ids = sorted([(t, f, i) for (t, f), i in word_feats.items()])
+        sent_id = sent_feats.get('UD:sent_id')
+        sent_feat_ids = sorted([(f, i) for f, i in sent_feats.items()
+                                if f != 'UD:sent_id'])
+        word_feat_ids = sorted([(f, i) for f, i in word_feats.items()])
         import itertools
         for _, word_group in itertools.groupby(self.table.results(),
                                                lambda x: x[0]['sentence']):
@@ -155,7 +154,7 @@ class ConlluWriter(Writer):
                 fout.write(f'# sent_id = {sfeats[sent_id]}\n')
             for feat, fid in sent_feat_ids:
                 if fid in sfeats:
-                    fout.write(f'# {feat} = {sfeats[fid]}\n')
+                    fout.write(f'# {feat.split(":")[-1]} = {sfeats[fid]}\n')
 
             table = []
             wid2idx = {}
@@ -178,25 +177,27 @@ class ConlluWriter(Writer):
                 null = False
                 ufeats = []
                 umisc = []
-                for tier, feat, fid in word_feat_ids:
+                for feat, fid in word_feat_ids:
+                    pieces = feat.split(':')
+                    name = pieces[-1]
                     val = wfeats.get(fid)
                     if val is None:
                         continue
-                    if tier == 'UD':
-                        if feat in feat2col:
-                            line[feat2col[feat]] = str(val)
-                        elif feat == 'head':
+                    if len(pieces) == 2 and pieces[0] == 'UD':
+                        if name in feat2col:
+                            line[feat2col[name]] = str(val)
+                        elif name == 'head':
                             heads[wid] = val
-                        elif feat == 'null' and val:
+                        elif name == 'null' and val:
                             null = True
-                    elif tier == 'UD/FEATS':
+                    elif 'FEATS' in pieces:
                         if isinstance(val, bool):
                             val = 'Yes' if val else 'No'
-                        ufeats.append(f'{feat}={val}')
-                    elif tier == 'UD/MISC':
+                        ufeats.append(f'{name}={val}')
+                    elif 'MISC' in pieces:
                         if isinstance(val, bool):
                             val = 'Yes' if val else 'No'
-                        umisc.append(f'{feat}={val}')
+                        umisc.append(f'{name}={val}')
                 if ufeats:
                     line[5] = '|'.join(ufeats)
                 if umisc:

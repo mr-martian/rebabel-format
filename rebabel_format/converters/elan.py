@@ -106,10 +106,10 @@ class EAFReader(XMLReader):
                             if index:
                                 index_val[name] += 1
                                 self.set_feature(
-                                    xmlid, 'alignment', 'index', 'int',
+                                    xmlid, 'alignment:index', 'int',
                                     index_val[name])
                             name = xmlid
-                        self.set_feature(name, 'ELAN', tier_name, 'str', t)
+                        self.set_feature(name, 'ELAN:'+tier_name, 'str', t)
                     self.names[xmlid] = name
                 elif ann.tag == 'ALIGNABLE_ANNOTATION':
                     t = self.annotation_text(ann)
@@ -125,10 +125,10 @@ class EAFReader(XMLReader):
                                 break
                     self.names[i] = i
                     self.set_type(i, tier_name)
-                    self.set_feature(i, 'alignment', 'starttime', 'int', s)
-                    self.set_feature(i, 'alignment', 'endtime', 'int', e)
+                    self.set_feature(i, 'alignment:starttime', 'int', s)
+                    self.set_feature(i, 'alignment:endtime', 'int', e)
                     if t is not None:
-                        self.set_feature(i, 'ELAN', tier_name, 'str', t)
+                        self.set_feature(i, 'ELAN:'+tier_name, 'str', t)
 
 class EAFWriter(Writer):
     identifier = 'elan'

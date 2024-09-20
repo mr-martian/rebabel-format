@@ -45,7 +45,7 @@ class FlextextReader(XMLReader):
             self.set_type(name, node.tag)
             if parent:
                 self.set_parent(name, parent)
-            self.set_feature(name, 'meta', 'index', 'int', idx)
+            self.set_feature(name, 'meta:index', 'int', idx)
             for feat, val in node.attrib.items():
                 typ = 'str'
                 if feat in ['chapter', 'verse']:
@@ -55,14 +55,14 @@ class FlextextReader(XMLReader):
             chidx = 0
             for ch in node:
                 if ch.tag == 'item':
-                    tier = 'FlexText/'+ch.attrib.get('lang', 'None')
-                    feat = ch.attrib.get('type', 'None')
+                    feat = ':'.join(['FlexText', ch.attrib.get('lang', 'None'),
+                                     ch.attrib.get('type', 'None')])
                     val = ch.text or ''
                     confidence = None
                     if 'analysisStatus' in ch.attrib:
                         confidence = dict(ANANLYSIS_STATUSES).get(
                             ch.attrib['analysisStatus'], 0)
-                    self.set_feature(name, tier, feat, 'str', val,
+                    self.set_feature(name, feat, 'str', val,
                                      confidence=confidence)
                 else:
                     chidx += 1
@@ -70,7 +70,7 @@ class FlextextReader(XMLReader):
         else:
             if parent is not None:
                 for feat, val in node.attrib.items():
-                    self.set_feature(parent, 'FlexText', feat, 'str', val)
+                    self.set_feature(parent, 'FlexText:'+feat, 'str', val)
             for i, ch in enumerate(node, 1):
                 self.iter_nodes(ch, parent=parent, idx=i)
 
@@ -165,7 +165,7 @@ class FlextextWriter(Writer):
         for layer in self.query_order:
             if layer in self.query:
                 feats[layer] = sorted(
-                    self.table.add_tier(layer, 'FlexText', prefix=True).items())
+                    self.table.add_tier(layer, 'FlexText').items())
         uid2elem = {}
         for id_dict, feat_dict in self.table.results():
             elem = None
@@ -182,13 +182,13 @@ class FlextextWriter(Writer):
                     parent = ET.SubElement(elem, group_names[layer])
                 uid2elem[lid] = (elem, parent)
                 unit_feats = feat_dict.get(lid, {})
-                for (tier, feat), fid in feats.get(layer, []):
+                for feat, fid in feats.get(layer, []):
+                    parts = feat.split(':')
                     val = unit_feats.get(fid)
-                    if val is None:
+                    if val is None or len(parts) != 3:
                         continue
-                    if tier.startswith('FlexText/'):
-                        i = ET.SubElement(elem, 'item', lang=tier[9:], type=feat)
-                        i.text = str(val)
+                    i = ET.SubElement(elem, 'item', lang=parts[1], type=parts[2])
+                    i.text = str(val)
         self.indent(tree, 0)
         ET.ElementTree(element=tree).write(
             fout, encoding='unicode', xml_declaration=True)
