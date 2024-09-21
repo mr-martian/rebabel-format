@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rebabel_format"
+version = "0.0.1"
+dependencies = [
+  "dataclasses >= 0.4; python_version < '3.7'",
+  "importlib_metadata >= 3.6; python_version < '3.10'",
+  "importlib_resources >= 1.4; python_version < '3.9'",
+  "tomli >= 1.1.0; python_version < '3.11'",
+]
+authors = [{ name = "Daniel Swanson", email = "rebabel@dangswan.com" }]
+description = "processing of reBabel linguistic annotation files"
+readme = "README.md"
+license = { file = "LICENSE.txt" }
+keywords = ["annotation", "format", "linguistics"]
+
+[project.urls]
+Homepage = "https://github.com/mr-martian/rebabel-format"
+
+[project.scripts]
+rebabel-format = "rebabel_format:main"
