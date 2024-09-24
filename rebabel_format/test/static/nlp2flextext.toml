@@ -1,0 +1,21 @@
+[import]
+mode = 'nlp_pos'
+infiles = ['data/nlp_pos.txt']
+delimiter = '/'
+
+[export]
+mode = 'flextext'
+root = 'phrase'
+skip = ['morph']
+
+[[export.mappings]]
+in_type = 'sentence'
+out_type = 'phrase'
+
+[[export.mappings]]
+in_feature = 'UD:upos'
+out_feature = 'FlexText/en:pos'
+
+[[export.mappings]]
+in_feature = 'UD:form'
+out_feature = 'FlexText/en:txt'
