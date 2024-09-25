@@ -27,10 +27,11 @@ class StaticTests(unittest.TestCase):
         command = fname.split('.')[-2]
         with self.subTest(fname):
             if command == 'export':
-                with tempfile.NamedTemporaryFile() as fout:
-                    proc = ALL_PROCESSES[command](config, db=db, outfile=fout.name)
-                    proc.run()
-                    text = fout.read().decode('utf-8')
+                name = fname.split('.')[0]
+                proc = ALL_PROCESSES[command](config, db=db, outfile=fname+'.out')
+                proc.run()
+                with open(fname+'.out') as fin:
+                    text = fin.read()
             else:
                 stream = io.StringIO()
                 with contextlib.redirect_stdout(stream):
@@ -44,15 +45,14 @@ class StaticTests(unittest.TestCase):
     def single_test(self, name):
         with self.subTest(name):
             config = read_config(name + '.toml')
-            with tempfile.TemporaryDirectory() as db_dir:
-                db = os.path.join(db_dir, 'data.db')
-                with self.subTest('import'):
-                    proc = ALL_PROCESSES['import'](config, db=db)
-                    proc.run()
-                for path in sorted(glob.glob(name+'.*')):
-                    if path.endswith('.toml') or path.endswith('~'):
-                        continue
-                    self.single_command(db, config, path)
+            db = name + '.db'
+            if os.path.isfile(db):
+                os.remove(db)
+            with self.subTest('import'):
+                proc = ALL_PROCESSES['import'](config, db=db)
+                proc.run()
+            for path in sorted(glob.glob(name+'.[0123456789]*.txt')):
+                self.single_command(db, config, path)
 
     def runTest(self):
         cwd_was = os.getcwd()
