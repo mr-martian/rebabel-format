@@ -161,11 +161,9 @@ class FlextextWriter(Writer):
             'word': 'morphemes',
         }
         tree = ET.Element('document', version='2')
-        feats = {}
         for layer in self.query_order:
             if layer in self.query:
-                feats[layer] = sorted(
-                    self.table.add_tier(layer, 'FlexText').items())
+                self.table.add_tier(layer, 'FlexText')
         uid2elem = {}
         for id_dict, feat_dict in self.table.results():
             elem = None
@@ -182,9 +180,8 @@ class FlextextWriter(Writer):
                     parent = ET.SubElement(elem, group_names[layer])
                 uid2elem[lid] = (elem, parent)
                 unit_feats = feat_dict.get(lid, {})
-                for feat, fid in feats.get(layer, []):
+                for feat, val in unit_feats.items():
                     parts = feat.split(':')
-                    val = unit_feats.get(fid)
                     if val is None or len(parts) != 3:
                         continue
                     i = ET.SubElement(elem, 'item', lang=parts[1], type=parts[2])

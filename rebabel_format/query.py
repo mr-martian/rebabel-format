@@ -294,6 +294,7 @@ class ResultTable:
         map_query(query, self.rev_type_map, self.rev_feat_map)
         self.nodes = list(search(db, query, order=order))
         self.features = []
+        self.feature_names = {}
         for result in self.nodes:
             dct = {}
             for l in result.values():
@@ -327,9 +328,9 @@ class ResultTable:
         return self.db.cur.fetchall()
 
     def add_features(self, node: str, features: list, map_features=True,
-                     error=True):
+                     error=True) -> None:
         if node is None:
-            return [None] * len(features)
+            return
         types = self.types[node]
         feats = []
         feat_types = {}
@@ -356,17 +357,17 @@ class ResultTable:
                 # TODO: If there's multiple types, this should get all
                 # features. We probably want to return a dict from this
                 # function.
-                fv = self.db.first_clauses('SELECT id, valuetype FROM tiers',
-                                           WhereClause('name', f),
-                                           WhereClause('unittype', types))
-                if fv is None:
-                    if error:
-                        raise ValueError(f'Feature {f} does not exist for unit type {types}.')
-                    else:
-                        feats.append(None)
-                        continue
-                feats.append(fv[0])
-                feat_types[fv[0]] = fv[1]
+                self.db.execute_clauses('SELECT id, valuetype FROM tiers',
+                                        WhereClause('name', f),
+                                        WhereClause('unittype', types))
+                found_any = not error
+                for i, t in self.db.cur.fetchall():
+                    found_any = True
+                    feats.append(i)
+                    feat_types[i] = t
+                    self.feature_names[i] = f
+                if not found_any:
+                    raise ValueError(f'Feature {f} does not exist for unit type {types}.')
         units = list(set(self._node_ids(node)))
         self.db.execute_clauses('SELECT unit, feature, value FROM features',
                                 WhereClause('unit', units),
@@ -375,11 +376,9 @@ class ResultTable:
             v = self.db.interpret_value(v, feat_types[f])
             for rid in self.unit2results[u]:
                 if u in utils.as_list(self.nodes[rid][node]):
-                    self.features[rid][u][f] = v
-        return feats
+                    self.features[rid][u][self.feature_names[f]] = v
 
-    def add_tier(self, node: str, tier: str, prefix=False):
-        names = []
+    def add_tier(self, node: str, tier: str) -> None:
         feats = []
         skip = set()
         for (fi, ti), (fo, to) in self.feat_map.items():
@@ -391,7 +390,7 @@ class ResultTable:
                                           WhereClause('unittype', self.types[node]))
                 if f:
                     feats.append(f[0])
-                    names.append(fo)
+                    self.feature_names[f[0]] = fo
             if fi.startswith(tier+':'):
                 skip.add(fi)
         self.db.execute_clauses('SELECT id, name FROM tiers',
@@ -401,9 +400,8 @@ class ResultTable:
             if f in skip:
                 continue
             feats.append(i)
-            names.append(f)
-        ids = self.add_features(node, feats, map_features=False)
-        return dict(zip(names, ids))
+            self.feature_names[i] = f
+        self.add_features(node, feats, map_features=False)
 
     def add_children(self, node, child_type):
         if not self.nodes:

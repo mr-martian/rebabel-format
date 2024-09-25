@@ -138,23 +138,20 @@ class ConlluWriter(Writer):
 
     def write(self, fout):
         feat2col = {'form': 1, 'lemma': 2, 'upos': 3, 'xpos': 4, 'deprel': 7}
-        sent_feats = self.table.add_tier('sentence', 'UD', prefix=False)
-        word_feats = self.table.add_tier('word', 'UD', prefix=True)
-        sent_id = sent_feats.get('UD:sent_id')
-        sent_feat_ids = sorted([(f, i) for f, i in sent_feats.items()
-                                if f != 'UD:sent_id'])
-        word_feat_ids = sorted([(f, i) for f, i in word_feats.items()])
+        self.table.add_tier('sentence', 'UD')
+        self.table.add_tier('word', 'UD')
         import itertools
         for _, word_group in itertools.groupby(self.table.results(),
                                                lambda x: x[0]['sentence']):
             sentence = list(word_group)
             sid = sentence[0][0]['sentence']
             sfeats = sentence[0][1][sid]
-            if sent_id in sfeats:
-                fout.write(f'# sent_id = {sfeats[sent_id]}\n')
-            for feat, fid in sent_feat_ids:
-                if fid in sfeats:
-                    fout.write(f'# {feat.split(":")[-1]} = {sfeats[fid]}\n')
+            if 'UD:sent_id' in sfeats:
+                fout.write(f'# sent_id = {sfeats["UD:sent_id"]}\n')
+            for feat, value in sorted(sfeats.items()):
+                if feat.count(':') != 1: continue
+                if feat == 'UD:sent_id': continue
+                fout.write(f'# {feat.split(":")[-1]} = {value}\n')
 
             table = []
             wid2idx = {}
@@ -177,10 +174,9 @@ class ConlluWriter(Writer):
                 null = False
                 ufeats = []
                 umisc = []
-                for feat, fid in word_feat_ids:
+                for feat, val in wfeats.items():
                     pieces = feat.split(':')
                     name = pieces[-1]
-                    val = wfeats.get(fid)
                     if val is None:
                         continue
                     if len(pieces) == 2 and pieces[0] == 'UD':
@@ -199,9 +195,9 @@ class ConlluWriter(Writer):
                             val = 'Yes' if val else 'No'
                         umisc.append(f'{name}={val}')
                 if ufeats:
-                    line[5] = '|'.join(ufeats)
+                    line[5] = '|'.join(sorted(ufeats))
                 if umisc:
-                    line[9] = '|'.join(umisc)
+                    line[9] = '|'.join(sorted(umisc))
                 if word_type == 'word':
                     if null:
                         null_num += 1
