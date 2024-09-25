@@ -9,13 +9,13 @@ class TextFabricReader(Reader):
     name in the `textfabric` tier. The value type is either string or integer
     as specified in the feature file.
 
-    Each unit also has an integer feature named `textfabric-meta:id`, which
+    Each unit also has an integer feature named `textfabric:meta:id`, which
     contains the numeric ID of the unit in Text-Fabric.
 
     Edges and edge features are imported as units of type `[name]-tf-link`,
-    which have reference features `textfabric-meta:parent` and
-    `textfabric-meta:child`, and a string or integer feature
-    `textfabric-meta:value`, if applicable.
+    which have reference features `textfabric:meta:parent` and
+    `textfabric:meta:child`, and a string or integer feature
+    `textfabric:meta:value`, if applicable.
     '''
 
     identifier = 'textfabric'
@@ -124,11 +124,11 @@ class TextFabricReader(Reader):
                 if feature_name == 'otype':
                     for node in nodes:
                         self.set_type(node, value)
-                        self.set_feature(node, 'textfabric-meta', 'id', 'int',
+                        self.set_feature(node, 'textfabric:meta:id', 'int',
                                          node)
                 elif value:
                     for node in nodes:
-                        self.set_feature(node, 'textfabric', feature_name,
+                        self.set_feature(node, 'textfabric:'+feature_name,
                                          'str' if is_str else 'int', value)
             else:
                 if len(pieces) == 1:
@@ -155,10 +155,10 @@ class TextFabricReader(Reader):
                 for f in nfrom:
                     for t in nto:
                         self.set_type((t, f), feature_name + '-tf-link')
-                        self.set_feature((t, f), 'textfabric-meta', 'parent',
+                        self.set_feature((t, f), 'textfabric:meta:parent',
                                          'ref', f)
-                        self.set_feature((t, f), 'textfabric-meta', 'child',
+                        self.set_feature((t, f), 'textfabric:meta:child',
                                          'ref', t)
                         if value:
-                            self.set_feature((t, f), 'textfabric-meta', 'value',
+                            self.set_feature((t, f), 'textfabric:meta:value',
                                              'str' if is_str else 'int', value)

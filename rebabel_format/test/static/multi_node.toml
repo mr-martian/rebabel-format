@@ -11,4 +11,4 @@ type = ['word', 'token']
 print = ['UD:lemma']
 parent = 'S'
 multiple = true
-features = [{tier = 'UD/FEATS', feature = 'Number', value = 'Sing'}]
+features = [{feature = 'UD:FEATS:Number', value = 'Sing'}]

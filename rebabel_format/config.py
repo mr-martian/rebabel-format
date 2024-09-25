@@ -28,18 +28,6 @@ def get_param(conf, *locs):
 def get_single_param(conf, action, key):
     return get_param(conf, [action, key], key)
 
-def parse_feature(obj):
-    if isinstance(obj, str) and obj.count(':') == 1:
-        return tuple(obj.split(':'))
-    elif isinstance(obj, dict) and 'tier' in obj and 'feature' in obj:
-        return obj['tier'], obj['feature']
-    elif isinstance(obj, dict) and 'feature' in obj:
-        return parse_feature(obj['feature'])
-    elif (isinstance(obj, list) or isinstance(obj, tuple)) and len(obj) == 2:
-        return obj[0], obj[1]
-    else:
-        raise ValueError(f'Invalid feature specifier {obj}.')
-
 def get_user(conf, action):
     user = get_single_param(conf, action, 'username')
     if user is None:
@@ -56,20 +44,10 @@ def parse_mappings(mappings):
     for i, mp in enumerate(mappings, 1):
         infeat = mp.get('in_feature')
         outfeat = mp.get('out_feature')
-        intier = mp.get('in_tier')
-        outtier = mp.get('out_tier')
         intype = mp.get('in_type')
         outtype = mp.get('out_type')
         if infeat and outfeat:
-            if intier:
-                f_in = (intier, infeat)
-            else:
-                f_in = parse_feature(infeat)
-            if outtier:
-                f_out = (outtier, outfeat)
-            else:
-                f_out = parse_feature(outfeat)
-            features.append((f_in, intype, f_out, outtype))
+            features.append((infeat, intype, outfeat, outtype))
         elif intype and outtype:
             type_dict[intype] = outtype
             rev_type_dict[outtype] = intype
