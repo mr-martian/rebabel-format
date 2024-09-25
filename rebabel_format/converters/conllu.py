@@ -24,8 +24,8 @@ class ConnluReader(LineReader):
     Words whose head is `0` will have `UD:head` unset.
 
     The features and miscelaneous columns will be imported as string features
-    in the tiers `UD/FEATS` and `UD/MISC`, respectively.
-    An exception is made for `UD/MISC:SpaceAfter`, which is imported as a boolean
+    in the tiers `UD:FEATS` and `UD:MISC`, respectively.
+    An exception is made for `UD:MISC:SpaceAfter`, which is imported as a boolean
     feature.
 
     - UD-edep

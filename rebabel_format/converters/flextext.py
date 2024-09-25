@@ -21,7 +21,7 @@ class FlextextReader(XMLReader):
     for a given parent node.
 
     Any <item> nodes will be imported as string features. The tier will be
-    `FlexText/[lang]`, the feature will be `[type]`, and the value will be
+    `FlexText:[lang]`, the feature will be `[type]`, and the value will be
     the text content of the XML node.
     '''
     identifier = 'flextext'

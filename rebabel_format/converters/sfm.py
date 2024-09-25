@@ -43,7 +43,7 @@ class SFMReader(LineReader):
         cmd = line.split()[0]
         if cmd == r'\ref':
             self.set_type('sentence', 'sentence')
-            self.set_feature('sentence', 'SFM', 'reference', 'str',
+            self.set_feature('sentence', 'SFM:reference', 'str',
                              line.split('.')[1])
 
         elif cmd == r'\tx':
@@ -53,22 +53,22 @@ class SFMReader(LineReader):
                 name = ('word', wid)
                 self.set_type(name, 'word')
                 self.set_parent(name, 'sentence')
-                self.set_feature(name, 'SFM', 'form', 'str', word)
-                self.set_feature(name, 'meta', 'index', 'int', wid)
+                self.set_feature(name, 'SFM:form', 'str', word)
+                self.set_feature(name, 'meta:index', 'int', wid)
 
         elif cmd == r'\mb':
             for morph, wid, mid in self.iter_morphs(line):
                 name = ('morph', wid, mid)
                 self.set_type(name, 'morpheme')
                 self.set_parent(name, ('word', wid))
-                self.set_feature(name, 'meta', 'index', 'int', mid)
-                self.set_feature(name, 'SFM', 'form', 'str', morph)
+                self.set_feature(name, 'meta:index', 'int', mid)
+                self.set_feature(name, 'SFM:form', 'str', morph)
 
         elif cmd == r'\gl':
             for morph, wid, mid in self.iter_morphs(line):
                 name = ('morph', wid, mid)
-                self.set_feature(name, 'SFM', 'gls', 'str', morph)
+                self.set_feature(name, 'SFM:gls', 'str', morph)
 
         elif cmd == r'\ft':
-            self.set_feature('sentence', 'SFM', 'translation', 'str',
+            self.set_feature('sentence', 'SFM:translation', 'str',
                              line[3:].strip())
