@@ -44,7 +44,7 @@ type = "sentence"
 # N is a word
 type = "word"
 # N has a feature named UD:upos with the value NOUN
-features = [{tier = "UD", feature = "upos", value = "NOUN"}]
+features = [{feature = "UD:upos", value = "NOUN"}]
 # N is part of S
 parent = "S"
 
@@ -56,13 +56,11 @@ parent = "S"
 
 # a different way of listing features
 [[query.V.features]]
-tier = "UD"
-feature = "upos"
+feature = "UD:upos"
 value = "VERB"
 
 [[query.V.features]]
-tier = "UD/FEATS"
-feature = "Person"
+feature = "UD:FEATS:Person"
 value = "3"
 ```
 
@@ -121,8 +119,8 @@ rebabel_format.run_command(
   mappings=[
     # use CoNLL-U sentence nodes where FlexText expects phrases
     {'in_type': 'sentence', 'out_type': 'phrase'},
-    # use UD:lemma where FlexText wants FlexText/en:txt
-    {'in_feature': 'UD:lemma', 'out_feature': 'FlexText/en:txt'},
+    # use UD:lemma where FlexText wants FlexText:en:txt
+    {'in_feature': 'UD:lemma', 'out_feature': 'FlexText:en:txt'},
   ],
   # settings specific to the FlexText writer:
   # the highest non-empty node will be the phrase

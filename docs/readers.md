@@ -11,7 +11,7 @@ class SomeReader(Reader):
     def read_file(self, fin):
         for line_number, line in enumerate(fin):
             self.set_type(line_number, 'line')
-            self.set_feature(line_number, 'something', 'line', 'str',
+            self.set_feature(line_number, 'something:line', 'str',
                              line.strip())
         self.finish_block()
 ```
@@ -27,7 +27,7 @@ Within `read_file`, units are created when information about them is specified, 
 - `set_type(name, type)`: specify the unit type of `name`; if the type of a unit is not specified, a `ReaderError` will be raised
 - `set_parent(child_name, parent_name)`: set the primary parent of a given unit
 - `add_relation(child_name, parent_name)`: set a non-primary parent of a given unit
-- `set_feature(name, tier, feature, type, value)`: set `tier:feature` to `value` for unit `name`, creating the feature with type `type`, if necessary
+- `set_feature(name, feature, type, value)`: set `feature` to `value` for unit `name`, creating the feature with type `type`, if necessary
 - `finish_block(keep_uids=False)`: indicates that a segment of data is complete and should be committed to the database
   - by default, the list of names accumulated by the other methods will be cleared; this can be prevented by setting `keep_uids=True`, which is useful for cases where the input has globally unique IDs, is very large, and has relations spanning the file
 
