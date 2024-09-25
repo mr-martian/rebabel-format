@@ -55,7 +55,7 @@ class Reader(metaclass=MetaReader):
         self.parents = {}
         self.relations = defaultdict(set)
         self.types = {}
-        self.features = defaultdict(dict) # (tier, feature, type) => value
+        self.features = defaultdict(dict) # (feature, type) => value
 
         self.filename = None
         self.location = None
@@ -113,14 +113,14 @@ class Reader(metaclass=MetaReader):
         self._check_name(child_name)
         self.relations[child_name].add(parent_name)
 
-    def set_feature(self, unit_name, tier, feature, ftype, value,
+    def set_feature(self, unit_name, feature: str, ftype: str, value,
                     confidence=None):
         self._check_name(unit_name)
         if ftype == 'ref':
             self._check_name(value)
         else:
             self.db.check_type(ftype, value)
-        self.features[unit_name][(tier, feature, ftype)] = (value, confidence)
+        self.features[unit_name][(feature, ftype)] = (value, confidence)
 
     def finish_block(self, parent_if_missing=None, keep_uids=False):
         parent_type_if_missing = None
@@ -165,18 +165,18 @@ class Reader(metaclass=MetaReader):
         feature_ids = {}
         features = []
         for name in self.id_seq:
-            for (tier, feature, ftype), (value, conf) in self.features[name].items():
-                m_key = ((tier, feature), self.types[name])
-                n_key = ((tier, feature), None)
+            for (feature, ftype), (value, conf) in self.features[name].items():
+                m_key = (feature, self.types[name])
+                n_key = (feature, None)
                 if m_key in self.feature_map:
-                    tier, feature = self.feature_map[m_key]
+                    feature = self.feature_map[m_key]
                 elif n_key in self.feature_map:
-                    tier, feature = self.feature_map[n_key]
-                key = (tier, feature, ftype, self.types[name])
+                    feature = self.feature_map[n_key]
+                key = (feature, ftype, self.types[name])
                 if key in feature_ids:
                     fid = feature_ids[key]
                 else:
-                    fid = self.ensure_feature(self.types[name], tier, feature, ftype)
+                    fid = self.ensure_feature(self.types[name], feature, ftype)
                     feature_ids[key] = fid
                 if ftype == 'ref':
                     value = uids[value]
@@ -199,19 +199,19 @@ class Reader(metaclass=MetaReader):
             self.types = {}
         self.block_count += 1
 
-    def ensure_feature(self, unittype, tier, feature, valuetype):
-        key = (unittype, tier, feature)
+    def ensure_feature(self, unittype, feature, valuetype):
+        key = (unittype, feature)
         if key in self.known_feats:
             return self.known_feats[key]
-        fid, typ = self.db.get_feature(unittype, tier, feature, error=False)
+        fid, typ = self.db.get_feature(unittype, feature, error=False)
         if typ == valuetype:
             self.known_feats[key] = fid
             return fid
         elif typ is not None:
-            self.error(f'Feature {tier}:{feature} for {unittype} already exists with value type {typ}.')
+            self.error(f'Feature {feature} for {unittype} already exists with value type {typ}.')
         else:
-            self.db.create_feature(unittype, tier, feature, valuetype)
-            fid, typ = self.db.get_feature(unittype, tier, feature, error=False)
+            self.db.create_feature(unittype, feature, valuetype)
+            fid, typ = self.db.get_feature(unittype, feature, error=False)
             self.known_feats[key] = fid
             return fid
 

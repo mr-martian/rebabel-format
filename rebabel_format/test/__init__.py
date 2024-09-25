@@ -40,7 +40,7 @@ class StaticTests(unittest.TestCase):
                 text = stream.getvalue()
             with open(fname) as fin:
                 expected = fin.read()
-                self.assertEqual(expected.strip(), text.strip())
+                self.assertEqual(expected.strip()+'\n', text.strip()+'\n')
 
     def single_test(self, name):
         with self.subTest(name):

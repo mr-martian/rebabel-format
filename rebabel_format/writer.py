@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.config import parse_feature
 from rebabel_format.parameters import Parameter
 
 ALL_WRITERS = {}

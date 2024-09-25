@@ -8,20 +8,34 @@ class Inspect(Process):
     name = 'inspect'
     schema = Parameter(type=bool, default=False, help='whether to output the defined features for all unit types')
 
+    def add_to_dict(self, pieces, vtype, dct):
+        if not pieces:
+            dct[None] = vtype
+        else:
+            if pieces[0] not in dct:
+                dct[pieces[0]] = {}
+            self.add_to_dict(pieces[1:], vtype, dct[pieces[0]])
+
+    def print_dict(self, dct, depth=1):
+        keys = sorted(k for k in dct if k is not None)
+        for key in keys:
+            if key is None:
+                continue
+            if None in dct[key]:
+                print('\t'*depth + f'{key}: {dct[key][None]}')
+            else:
+                print('\t'*depth + key)
+            self.print_dict(dct[key], depth+1)
+
     def run(self):
         if self.schema:
             feats = self.db.get_all_features()
-            fd = defaultdict(lambda: defaultdict(list))
-            for fid, tier, name, utype, vtype in feats:
-                fd[utype][tier].append((name, vtype))
+            fd = defaultdict(dict)
+            for fid, name, utype, vtype in feats:
+                if name == 'meta:active':
+                    continue
+                self.add_to_dict(name.split(':'), vtype, fd[utype])
             for utype, d1 in sorted(fd.items()):
                 print(utype)
-                for tier, d2 in sorted(d1.items()):
-                    if tier == 'meta' and len(d2) == 1:
-                        continue
-                    print('\t' + tier)
-                    for feat, vtype in sorted(d2):
-                        if tier == 'meta' and feat == 'active':
-                            continue
-                        print(f'\t\t{feat}: {vtype}')
+                self.print_dict(d1)
                 print('')

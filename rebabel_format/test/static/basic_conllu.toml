@@ -7,7 +7,7 @@ schema = true
 
 [query.W]
 type = 'word'
-features = [{tier = 'UD/FEATS', feature = 'Number', value = 'Sing'}]
+features = [{feature = 'UD:FEATS:Number', value = 'Sing'}]
 print = ['UD:id', 'UD:lemma']
 order = 'UD:lemma'
 
@@ -16,32 +16,30 @@ sequence = ['rule1']
 
 [transform.rule1.query.V]
 type = 'word'
-features = [{tier = 'UD', feature = 'upos', value = 'VERB'}]
+features = [{feature = 'UD:upos', value = 'VERB'}]
 
 [[transform.rule1.commands]]
 type = 'set_feature'
 target = 'V'
-tier = 'UD'
-feature = 'lemma'
+feature = 'UD:lemma'
 value = 'gargle'
 
 [[transform.rule1.commands]]
 type = 'set_feature'
 target = 'V'
-tier = 'UD'
-feature = 'xpos'
+feature = 'UD:xpos'
 value = 'ninja'
 
 [export]
 mode = 'conllu'
 
 [concordance]
-label = [{unit = 'S', tier = 'UD', feature = 'sent_id'}]
+label = [{unit = 'S', feature = 'UD:sent_id'}]
 print = 'UD:upos'
 
 [concordance.query.Center]
 type = 'word'
-features = [{tier = 'UD', feature = 'lemma', value = '.'}]
+features = [{feature = 'UD:lemma', value = '.'}]
 parent = 'S'
 
 [concordance.query.S]

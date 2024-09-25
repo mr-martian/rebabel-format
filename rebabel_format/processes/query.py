@@ -19,7 +19,6 @@ class Search(Process):
             print('\t'+lab.ljust(self.lab_width+3)+'\t'+v)
 
     def run(self):
-        from rebabel_format.config import parse_feature
         from collections import defaultdict
         from rebabel_format.query import search
         self.print_feats = defaultdict(list)
@@ -31,18 +30,16 @@ class Search(Process):
             typ = item.get('type')
             if typ is None:
                 continue
-            for p in pr:
-                t, f = parse_feature(p)
-                lab = f'{t}:{f}'
-                self.lab_width = max(self.lab_width, len(lab))
+            for feat in pr:
+                self.lab_width = max(self.lab_width, len(feat))
                 got_any = False
                 for single_type in utils.as_list(typ):
-                    fid, _ = self.db.get_feature(single_type, t, f, error=False)
+                    fid, _ = self.db.get_feature(single_type, feat, error=False)
                     if fid is None: continue
-                    self.print_feats[name].append((lab, fid))
+                    self.print_feats[name].append((feat, fid))
                     got_any = True
                 if not got_any:
-                    raise ValueError(f"Could not find print feature '{p}' for unit '{name}'.")
+                    raise ValueError(f"Could not find print feature '{feat}' for unit '{name}'.")
         for n, result in enumerate(search(self.db, self.query), 1):
             print('Result', n)
             for name, uid in sorted(result.items()):

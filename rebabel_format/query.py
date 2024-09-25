@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile, WhereClause
-from rebabel_format.config import parse_feature
 from rebabel_format import utils
 
 from collections import defaultdict
@@ -45,13 +44,13 @@ class UnitQuery:
         self.unittype = unittype
         self.features = []
     def add_feature(self, spec):
-        if 'tier' not in spec or 'feature' not in spec:
+        if 'feature' not in spec:
             raise ValueError(f'Invalid feature specifier {spec}.')
-        feats = self.db.get_feature_multi_type(self.unittype, spec['tier'],
-                                               spec['feature'], error=True)
+        feats = self.db.get_feature_multi_type(self.unittype, spec['feature'],
+                                               error=True)
         ftypes = sorted(set(f[1] for f in feats))
         if len(ftypes) > 1:
-            raise ValueError(f"Feature '{spec['tier']}:{spec['feature']}' has multiple types; found {ftypes}.")
+            raise ValueError(f"Feature '{spec['feature']}' has multiple types; found {ftypes}.")
         ftyp = ftypes[0]
         fid = [f[0] for f in feats]
         if ftyp == 'ref':
@@ -183,13 +182,12 @@ def search(db, query, order=None):
         elif not units[name]:
             return
         if 'order' in pattern:
-            tier, feature = parse_feature(pattern['order'])
-            feats = db.get_feature_multi_type(pattern['type'], tier, feature,
+            feats = db.get_feature_multi_type(pattern['type'], pattern['order'],
                                               error=False)
             if not feats:
-                raise ValueError(f"Cannot find feature '{tier}:{feature}' for ordering unit '{name}'.")
+                raise ValueError(f"Cannot find feature '{pattern['order']}' for ordering unit '{name}'.")
             if len(set(f[1] for f in feats)) > 1:
-                raise ValueError(f"Cannot sort unit '{name}' by feature '{spec['tier']}:{spec['feature']}' because it has multiple types.")
+                raise ValueError(f"Cannot sort unit '{name}' by feature '{pattern['order']}' because it has multiple types.")
             order_by[name] = db.get_feature_values(units[name],
                                                    [f[0] for f in feats])
         if 'parent' in pattern and pattern['parent'] is not None:
@@ -268,11 +266,10 @@ def map_query(query, type_map, feat_map):
 
     def map_feat(oldfeat, oldtypes):
         nonlocal feat_map
-        tier, feat = parse_feature(oldfeat)
         for typ in oldtypes + [None]:
-            if ((tier, feat), typ) in feat_map:
-                return feat_map[((tier, feat), typ)][0]
-        return tier, feat
+            if (oldfeat, typ) in feat_map:
+                return feat_map[(oldfeat, typ)][0]
+        return oldfeat
 
     if not type_map and not feat_map:
         return
@@ -282,11 +279,10 @@ def map_query(query, type_map, feat_map):
         oldtypes = utils.as_list(v['type'])
         v['type'] = [type_map.get(t, t) for t in oldtypes]
         if 'order' in v:
-            t, f = map_feat(v['order'], oldtypes)
-            v['order'] = {'tier': t, 'feature': f}
+            v['order'] = map_feat(v['order'], oldtypes)
         if 'features' in v:
             for dct in v['features']:
-                dct['tier'], dct['feature'] = map_feat(dct, oldtypes)
+                dct['feature'] = map_feat(dct, oldtypes)
 
 class ResultTable:
     def __init__(self, db, query, order=None, type_map=None, feat_map=None):
@@ -298,6 +294,7 @@ class ResultTable:
         map_query(query, self.rev_type_map, self.rev_feat_map)
         self.nodes = list(search(db, query, order=order))
         self.features = []
+        self.feature_names = {}
         for result in self.nodes:
             dct = {}
             for l in result.values():
@@ -331,9 +328,9 @@ class ResultTable:
         return self.db.cur.fetchall()
 
     def add_features(self, node: str, features: list, map_features=True,
-                     error=True):
+                     error=True) -> None:
         if node is None:
-            return [None] * len(features)
+            return
         types = self.types[node]
         feats = []
         feat_types = {}
@@ -348,31 +345,26 @@ class ResultTable:
                 else:
                     feat_types[f] = t[0]
             else:
-                tier, feature = parse_feature(f)
                 if map_features:
                     for (fi, ti), (fo, to) in self.feat_map.items():
-                        if fo != (tier, feature):
+                        if fo != f:
                             continue
                         # types will have already been remapped
                         if ti not in utils.as_list(self.types[node]) + [None]:
                             continue
-                        tier, feature = fi
+                        f = fi
                         break
-                # TODO: If there's multiple types, this should get all
-                # features. We probably want to return a dict from this
-                # function.
-                f = self.db.first_clauses('SELECT id, valuetype FROM tiers',
-                                          WhereClause('tier', tier),
-                                          WhereClause('feature', feature),
-                                          WhereClause('unittype', types))
-                if f is None:
-                    if error:
-                        raise ValueError(f'Feature {tier}:{feature} does not exist for unit type {types}.')
-                    else:
-                        feats.append(None)
-                        continue
-                feats.append(f[0])
-                feat_types[f[0]] = f[1]
+                self.db.execute_clauses('SELECT id, valuetype FROM tiers',
+                                        WhereClause('name', f),
+                                        WhereClause('unittype', types))
+                found_any = not error
+                for i, t in self.db.cur.fetchall():
+                    found_any = True
+                    feats.append(i)
+                    feat_types[i] = t
+                    self.feature_names[i] = f
+                if not found_any:
+                    raise ValueError(f'Feature {f} does not exist for unit type {types}.')
         units = list(set(self._node_ids(node)))
         self.db.execute_clauses('SELECT unit, feature, value FROM features',
                                 WhereClause('unit', units),
@@ -381,42 +373,32 @@ class ResultTable:
             v = self.db.interpret_value(v, feat_types[f])
             for rid in self.unit2results[u]:
                 if u in utils.as_list(self.nodes[rid][node]):
-                    self.features[rid][u][f] = v
-        return feats
+                    self.features[rid][u][self.feature_names[f]] = v
 
-    def add_tier(self, node: str, tier: str, prefix=False):
-        tier_list = [tier]
-        if prefix:
-            self.db.execute_clauses('SELECT DISTINCT tier FROM tiers',
-                                    WhereClause('unittype', self.types[node]))
-            tier_list = [t[0] for t in self.db.cur.fetchall()
-                         if t[0].startswith(tier)]
-        names = []
+    def add_tier(self, node: str, tier: str) -> None:
         feats = []
         skip = set()
         for (fi, ti), (fo, to) in self.feat_map.items():
             if ti and ti not in self.types[node]:
                 continue
-            if fo[0] == tier or (prefix and fo[0].startswith(tier)):
+            if fo.startswith(tier+':'):
                 f = self.db.first_clauses('SELECT id FROM tiers',
-                                          WhereClause('tier', fi[0]),
-                                          WhereClause('feature', fi[1]),
+                                          WhereClause('name', fi),
                                           WhereClause('unittype', self.types[node]))
                 if f:
                     feats.append(f[0])
-                    names.append(fo)
-            if fi[0] == tier or (prefix and fi[0].startswith(tier)):
+                    self.feature_names[f[0]] = fo
+            if fi.startswith(tier+':'):
                 skip.add(fi)
-        self.db.execute_clauses('SELECT id, tier, feature FROM tiers',
+        self.db.execute_clauses('SELECT id, name FROM tiers',
                                 WhereClause('unittype', self.types[node]),
-                                WhereClause('tier', tier_list))
-        for i, t, f in self.db.cur.fetchall():
-            if (t, f) in skip:
+                                WhereClause('name', tier+':%', operator='LIKE'))
+        for i, f in self.db.cur.fetchall():
+            if f in skip:
                 continue
             feats.append(i)
-            names.append((t, f))
-        ids = self.add_features(node, feats, map_features=False)
-        return dict(zip(names, ids))
+            self.feature_names[i] = f
+        self.add_features(node, feats, map_features=False)
 
     def add_children(self, node, child_type):
         if not self.nodes:

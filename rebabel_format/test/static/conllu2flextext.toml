@@ -13,8 +13,8 @@ out_type = 'phrase'
 
 [[export.mappings]]
 in_feature = 'UD:lemma'
-out_feature = 'FlexText/en:lem'
+out_feature = 'FlexText:en:lem'
 
 [[export.mappings]]
 in_feature = 'UD:sent_id'
-out_feature = 'FlexText/en:sid'
+out_feature = 'FlexText:en:sid'

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from rebabel_format.config import get_single_param, parse_feature, parse_mappings
+from rebabel_format.config import get_single_param, parse_mappings
 from dataclasses import dataclass
 from typing import Any
 
@@ -70,12 +70,6 @@ class QueryParameter(Parameter):
             raise ValueError('Query contains no valid nodes.')
         # TODO: check parent etc
         return val
-
-@dataclass
-class FeatureParameter(Parameter):
-    def process(self, name, value):
-        val = super().process(name, value)
-        return parse_feature(val)
 
 @dataclass
 class MappingParameter(Parameter):
