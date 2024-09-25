@@ -6,7 +6,11 @@ The primary product of this repository is a program named `rebabel-format`. This
 
 Processes operate on [SQLite](https://sqlite.org) databases of linguistic information. These databases contain three things:
 - **Units** represent linguistic objects, such as sentences, words, or morphemes. They have a type, such as `"sentence"`.
-- **Tiers** define what data can be associated with units. They have a feature name, such as `"Gender"`, a tier name, such as `"Morphology"` (so that tiers can be grouped), what unit type they apply to, and what type of value they contain (string, integer, boolean, or reference to another unit). (Tiers are also sometimes referred to as "features" in the code. The fact that this object has multiple names that both overlap with the names of its attributes is a confusion that should probably be fixed at some point.)
+- **Tiers** define what data can be associated with units. They have:
+  - A **name**, such as `"UD:FEATS:Gender"` (where `:` separates components, so this is UD data, subcategory FEATS, and specific feature name Gender
+  - A **unit type** that they apply to
+  - A **value type** specifying what they contain (string, integer, boolean, or reference to another unit).
+  - (Tiers are also sometimes referred to as "features" in the code. The fact that this object has multiple names that both overlap with the names of its attributes is a confusion that should probably be fixed at some point.)
 - **Feature Values** are values for a particular tier for a particular unit. They are divided into definite features, which must be unique per tier-unit pair and are associated with a user and can have a confidence indicator (integer), and suggestions, which are not unique and have a probability field.
 
 The database schema is defined in [`schema.sql`](rebabel_format/schema.sql) and the Python interface for it is in [`db.py`](rebabel_format/db.py).

@@ -15,21 +15,19 @@ class SomeWriter(Writer):
     indent = Parameter(type=str, default='\t')
 
     def write(self, fout):
-        s_feat = self.table.add_features('S', ['something:text'])[0]
+        self.table.add_features('S', ['something:text'])
 
         w_feat_names = ['something:lemma', 'something:pos']
-        w_feat_ids = self.table.add_features('W', w_feat_names)
-        w_lemma = w_feat_ids[0]
-        w_pos = w_feat_ids[1]
+        self.table.add_features('W', w_feat_names)
 
         current_sentence = None
         for units, features in self.table.results():
             if units['S'] != current_sentence:
-                fout.write(str(features[units['S']].get(s_feat, '')) + '\n')
+                fout.write(str(features[units['S']].get('something:text', '')) + '\n')
                 current_sentence = units['S']
             fout.write(self.indent)
-            fout.write(str(features[units['W']].get(w_lemma, '')))
+            fout.write(str(features[units['W']].get('something:lemma', '')))
             fout.write(' ')
-            fout.write(str(features[units['W']].get(w_pos, '')))
+            fout.write(str(features[units['W']].get('something:pos', '')))
             fout.write('\n')
 ```
