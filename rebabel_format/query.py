@@ -354,9 +354,6 @@ class ResultTable:
                             continue
                         f = fi
                         break
-                # TODO: If there's multiple types, this should get all
-                # features. We probably want to return a dict from this
-                # function.
                 self.db.execute_clauses('SELECT id, valuetype FROM tiers',
                                         WhereClause('name', f),
                                         WhereClause('unittype', types))
