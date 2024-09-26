@@ -14,8 +14,8 @@ out_type = 'phrase'
 
 [[export.mappings]]
 in_feature = 'UD:upos'
-out_feature = 'FlexText/en:pos'
+out_feature = 'FlexText:en:pos'
 
 [[export.mappings]]
 in_feature = 'UD:form'
-out_feature = 'FlexText/en:txt'
+out_feature = 'FlexText:en:txt'
