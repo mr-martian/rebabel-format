@@ -1,44 +1,29 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.parameters import Parameter, DBParameter, QueryParameter
+from rebabel_format.parameters import Parameter, DBParameter, QueryParameter, process_parameters
 import logging
 
 ALL_PROCESSES = {}
 
-class MetaProcess(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_PROCESSES
-        new_attrs = attrs.copy()
-        proc_name = attrs.get('name')
-        parameters = {}
-        for b in bases:
-            parameters.update(getattr(b, 'parameters', {}))
-        for attr, value in attrs.items():
-            if isinstance(value, Parameter):
-                parameters[attr] = value
-                del new_attrs[attr]
-        new_attrs['parameters'] = parameters
-        if proc_name:
-            new_attrs['logger'] = logging.getLogger('reBabel.'+proc_name)
-        ret = super(MetaProcess, cls).__new__(cls, name, bases, new_attrs)
-        if proc_name is not None:
-            ALL_PROCESSES[proc_name] = ret
-        return ret
-
-class Process(metaclass=MetaProcess):
+class Process:
     name = None
+    parameters = {}
     db = DBParameter(help='the database file to operate on')
 
     def __init__(self, conf, **kwargs):
         self.conf = conf
         self.other_args = kwargs
-        for name, parser in self.parameters.items():
-            if name in kwargs:
-                value = parser.process(name, kwargs[name])
-            else:
-                value = parser.extract(conf, self.name, name)
-            setattr(self, name, value)
+        self.parameter_values = process_parameters(self.parameters, conf, self.name, kwargs)
+        self.logger = logging.getLogger('reBabel.' + (self.name or 'unnamed_process'))
+
+    def __init_subclass__(cls, *args, **kwargs):
+        global ALL_PROCESSES
+        super.__init_subclass__(*args, **kwargs)
+        if cls.name:
+            if cls.name in ALL_PROCESSES:
+                raise ValueError(f'Identifier {cls.name} is already used by another Process class.')
+            ALL_PROCESSES[cls.name] = cls
 
     def run(self):
         pass

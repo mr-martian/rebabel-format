@@ -1,33 +1,13 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.parameters import Parameter
+from rebabel_format.parameters import Parameter, process_parameters
 
 ALL_WRITERS = {}
 
-class MetaWriter(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_WRITERS
-        new_attrs = attrs.copy()
-        ident = attrs.get('identifier')
-        if ident in ALL_WRITERS:
-            raise ValueError(f'Identifier {ident} is already used by another writer class.')
-
-        parameters = {}
-        for b in bases:
-            parameters.update(getattr(b, 'parameters', {}))
-        for attr, value in attrs.items():
-            if isinstance(value, Parameter):
-                parameters[attr] = value
-                del new_attrs[attr]
-        new_attrs['parameters'] = parameters
-
-        ret = super(MetaWriter, cls).__new__(cls, name, bases, new_attrs)
-        if ident is not None:
-            ALL_WRITERS[ident] = ret
-        return ret
-
-class Writer(metaclass=MetaWriter):
+class Writer:
+    identifier = None
+    parameters = {}
     query = {}
     query_order = []
 
@@ -36,12 +16,7 @@ class Writer(metaclass=MetaWriter):
         self.db = db
         self.conf = conf
         self.other_args = kwargs
-        for name, parser in self.parameters.items():
-            if name in kwargs:
-                value = parser.process(name, kwargs[name])
-            else:
-                value = parser.extract(conf, 'export', name)
-            setattr(self, name, value)
+        self.parameter_values = process_parameters(self.parameters, conf, 'export', kwargs)
         if self.query:
             self.pre_query()
             if query_updates:
@@ -51,6 +26,14 @@ class Writer(metaclass=MetaWriter):
             from rebabel_format.query import ResultTable
             self.table = ResultTable(self.db, self.query, self.query_order,
                                      type_map=type_map, feat_map=feat_map)
+
+    def __init_subclass__(cls, *args, **kwargs):
+        global ALL_WRITERS
+        super.__init_subclass__(*args, **kwargs)
+        if cls.identifier:
+            if cls.identifier in ALL_WRITERS:
+                raise ValueError(f'Identifier {cls.identifier} is already used by another Writer class.')
+            ALL_WRITERS[cls.identifier] = cls
 
     def pre_query(self):
         pass

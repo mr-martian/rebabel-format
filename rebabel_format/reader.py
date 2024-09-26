@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.parameters import Parameter
+from rebabel_format.parameters import Parameter, process_parameters
 import logging
 from collections import defaultdict
 
@@ -10,43 +10,17 @@ ALL_READERS = {}
 class ReaderError(Exception):
     pass
 
-class MetaReader(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_READERS
-        new_attrs = attrs.copy()
-        ident = attrs.get('identifier')
-        if ident in ALL_READERS:
-            raise ValueError(f'Identifier {ident} is already used by another reader class.')
-        if ident:
-            new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
+class Reader:
+    identifier = None
+    parameters = {}
 
-        parameters = {}
-        for b in bases:
-            parameters.update(getattr(b, 'parameters', {}))
-        for attr, value in attrs.items():
-            if isinstance(value, Parameter):
-                parameters[attr] = value
-                del new_attrs[attr]
-        new_attrs['parameters'] = parameters
-
-        ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
-        if ident is not None:
-            ALL_READERS[ident] = ret
-        return ret
-
-class Reader(metaclass=MetaReader):
     def __init__(self, db, user, conf, kwargs):
         self.db = db
         self.user = user
 
         self.conf = conf
         self.other_args = kwargs
-        for name, parser in self.parameters.items():
-            if name in kwargs:
-                value = parser.process(name, kwargs[name])
-            else:
-                value = parser.extract(conf, 'import', name)
-            setattr(self, name, value)
+        self.parameter_values = process_parameters(self.parameters, conf, 'import', kwargs)
 
         self.known_feats = {}
         self.uids = {}
@@ -65,29 +39,28 @@ class Reader(metaclass=MetaReader):
         self.type_map = {}
         self.feature_map = {}
 
+        self.logger = logging.getLogger('reBabel.reader.'+(self.identifier or 'unnamed_reader'))
+
+    def __init_subclass__(cls, *args, **kwargs):
+        global ALL_READERS
+        super().__init_subclass__(*args, **kwargs)
+        if cls.identifier:
+            if cls.identifier in ALL_READERS:
+                raise ValueError(f'Identifier {cls.identifier} is already used by another Reader class.')
+            ALL_READERS[cls.identifier] = cls
+
     def info(self, msg):
-        try:
-            self.logger.info(msg)
-        except AttributeError:
-            pass
+        self.logger.info(msg)
 
     def warning(self, msg):
-        try:
-            self.logger.warn(msg)
-        except AttributeError:
-            pass
+        self.logger.warn(msg)
 
     def error(self, msg):
         prefix = ', '.join([x for x in [self.filename, self.location] if x])
         if prefix:
             prefix += ': '
-        send = prefix + msg
-        try:
-            self.logger.error(send)
-            send = ''
-        except AttributeError:
-            pass
-        raise ReaderError(send)
+        self.logger.error(prefix+msg)
+        raise ReaderError()
 
     def set_mappings(self, type_map, feat_map):
         self.type_map = type_map
