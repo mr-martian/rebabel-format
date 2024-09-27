@@ -8,12 +8,14 @@ from rebabel_format.writer import ALL_WRITERS
 def load_plugins(plugin_type: str) -> None:
     import sys
 
+    print(f"plugin_type: {plugin_type}")
     print(f"sys.version_info: {sys.version_info}")
     if sys.version_info < (3, 10):
         from importlib_metadata import entry_points
     else:
         from importlib.metadata import entry_points
     for ep in entry_points(group="rebabel." + plugin_type):
+        print(f"ep: {ep}")
         ep.load()
 
 
