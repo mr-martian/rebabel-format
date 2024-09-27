@@ -22,6 +22,3 @@ Homepage = "https://github.com/mr-martian/rebabel-format"
 
 [project.scripts]
 rebabel-format = "rebabel_format:main"
-
-[project.entry-points."rebabel.readers"]
-readers = "rebabel:readers"
