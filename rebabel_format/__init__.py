@@ -31,12 +31,14 @@ def import_directory(dirname: str) -> None:
 
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), dirname)
     for fname in glob.glob(os.path.join(path, "*.py")):
+        print(f"fname: {fname}")
         if fname in sys.modules:
             continue
         spec = importlib.util.spec_from_file_location("blah", fname)
         module = importlib.util.module_from_spec(spec)
         sys.modules[fname] = module
         spec.loader.exec_module(module)
+    print(f"sys.modules: {sys.modules}")
 
 
 def load_processes(plugins: bool) -> None:
@@ -184,8 +186,10 @@ run `rebabel-format help [ACTION]` for a longer description."""
             print(f"Unknown process {args.config}.")
     else:
         if args.action == "import":
+            print("action is import")
             load_readers(True)
         elif args.action == "export":
+            print("action is export")
             load_writers(True)
         conf = config.read_config(args.config)
         logging.basicConfig(level=args.log_level)
