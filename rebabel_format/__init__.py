@@ -37,8 +37,8 @@ def import_directory(dirname: str) -> None:
         spec = importlib.util.spec_from_file_location("blah", fname)
         module = importlib.util.module_from_spec(spec)
         sys.modules[fname] = module
+        print(f"sys.modules: {sys.modules[fname]}")
         spec.loader.exec_module(module)
-    print(f"sys.modules: {sys.modules}")
 
 
 def load_processes(plugins: bool) -> None:
