@@ -15,6 +15,8 @@ def load_plugins(plugin_type: str) -> None:
     else:
         from importlib.metadata import entry_points
 
+    eps = entry_points()
+    print(f"sorted entry point groups: {sorted(eps.groups)}")
     print(f"entry points: {entry_points}")
     for ep in entry_points(group="rebabel." + plugin_type):
         print(f"ep: {ep}")
