@@ -32,6 +32,8 @@ def import_directory(dirname: str) -> None:
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), dirname)
     print(f"path: {path}")
 
+    print(os.listdir())
+
     for fname in glob.glob(os.path.join(path, "*")):
         print(f"fname: {fname}")
 
