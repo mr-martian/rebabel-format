@@ -31,9 +31,9 @@ def import_directory(dirname: str) -> None:
 
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), dirname)
     print(f"path: {path}")
-    print(
-        f"files in {path}: {os.listdir('/Users/joseph/Desktop/FrontEndGapApp/pyinstaller_test/dist/hello_world/_internal/rebabel_format')}"
-    )
+    script_path = os.path.abspath(__file__)
+    parent_dir = os.path.dirname(script_path)
+    print(os.listdir(parent_dir))
     for fname in glob.glob(os.path.join(path, "*.py")):
         print(f"fname: {fname}")
         if fname in sys.modules:
