@@ -32,10 +32,15 @@ def import_directory(dirname: str) -> None:
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), dirname)
     print(f"path: {path}")
 
-    print(os.listdir())
+    if getattr(sys, "frozen", False):
+        # If the application is run as a bundle, the PyInstaller bootloader
+        # extends the sys module by a flag frozen=True and sets the app
+        # path into variable _MEIPASS'.
+        application_path = sys._MEIPASS
+    else:
+        application_path = os.path.dirname(os.path.abspath(__file__))
 
-    for fname in glob.glob(os.path.join(path, "*")):
-        print(f"fname: {fname}")
+    print(f"APPLICATION_PATH: {application_path}")
 
     for fname in glob.glob(os.path.join(path, "*.py")):
         print(f"fname: {fname}")
