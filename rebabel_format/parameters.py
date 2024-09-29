@@ -11,9 +11,24 @@ class Parameter:
     type: type = None
     help: str = 'a parameter'
 
+    name = None
+
     def __post_init__(self):
         if self.default is not None:
             self.required = False
+
+    def __set_name__(self, owner, name):
+        # make a copy so that we don't end up sharing a mutable dictionary
+        # between all the different subclasses
+        dct = {}
+        if hasattr(owner, 'parameters'):
+            dct.update(owner.parameters)
+        dct[name] = self
+        owner.parameters = dct
+        self.name = name
+
+    def __get__(self, instance, owner):
+        return instance.parameter_values[self.name]
 
     def process(self, name, value):
         if value is None:
@@ -42,6 +57,15 @@ class Parameter:
         if paren:
             ret += f' ({"; ".join(paren)})'
         return ret
+
+def process_parameters(parameters, conf, conf_prefix, kwargs):
+    ret = {}
+    for name, parser in parameters.items():
+        if name in kwargs:
+            ret[name] = parser.process(name, kwargs[name])
+        else:
+            ret[name] = parser.extract(conf, conf_prefix, name)
+    return ret
 
 @dataclass
 class DBParameter(Parameter):
