@@ -353,6 +353,7 @@ class JSONReader(Reader):
 
 class LineReader(Reader):
     block_name = 'sentence'
+    include_boundaries = False
 
     def is_boundary(self, line):
         return not line
@@ -379,7 +380,9 @@ class LineReader(Reader):
                 self.location = f'line {linenumber}'
                 self.reset()
                 block_error = False
-            elif not block_error:
+                if not self.include_boundaries:
+                    continue
+            if not block_error:
                 try:
                     self.process_line(line.strip())
                 except ReaderError:

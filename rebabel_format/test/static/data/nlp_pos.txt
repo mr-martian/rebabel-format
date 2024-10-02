@@ -1,0 +1,3 @@
+The/DET dog/NOUN barks/VERB ./PUNC
+
+The/DET cat/NOUN meows/VERB ./PUNC
