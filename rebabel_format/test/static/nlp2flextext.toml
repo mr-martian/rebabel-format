@@ -13,9 +13,9 @@ in_type = 'sentence'
 out_type = 'phrase'
 
 [[export.mappings]]
-in_feature = 'UD:upos'
+in_feature = 'nlp:pos'
 out_feature = 'FlexText:en:pos'
 
 [[export.mappings]]
-in_feature = 'UD:form'
+in_feature = 'nlp:form'
 out_feature = 'FlexText:en:txt'
