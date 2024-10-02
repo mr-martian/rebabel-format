@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.config import parse_feature
 from rebabel_format.parameters import Parameter, DBParameter, QueryParameter
 import logging
 
@@ -44,9 +43,8 @@ class Process(metaclass=MetaProcess):
     def run(self):
         pass
 
-    def get_feature(self, unittype, spec):
-        tier, feature = parse_feature(spec)
-        return self.db.get_feature(unittype, tier, feature)
+    def get_feature(self, unittype: str, feature: str):
+        return self.db.get_feature(unittype, feature)
 
     @classmethod
     def help_text_epilog(cls):
@@ -75,7 +73,7 @@ class SearchProcess(Process):
     def get_value(self, result, spec):
         uid = result[spec['unit']]
         utype = self.db.get_unit_type(uid)
-        fid, vtype = self.db.get_feature(utype, spec['tier'], spec['feature'])
+        fid, vtype = self.db.get_feature(utype, spec['feature'])
         return self.db.get_feature_value(uid, fid)
 
     def print_label(self, result, labels):

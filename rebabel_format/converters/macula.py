@@ -48,11 +48,11 @@ class MaculaNodeReader(XMLReader):
                         self.add_relation(gid, nid)
 
                 if child.text and not child.text.isspace():
-                    self.set_feature(nid, 'macula', 'form', 'str', child.text)
+                    self.set_feature(nid, 'macula:form', 'str', child.text)
 
                 for key, value in child.attrib.items():
                     if key in node_ids:
                         key = 'id'
-                    self.set_feature(nid, 'macula', key, 'str', value)
+                    self.set_feature(nid, 'macula:'+key, 'str', value)
 
         self.finish_block()

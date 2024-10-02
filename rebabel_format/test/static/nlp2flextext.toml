@@ -1,6 +1,7 @@
 [import]
-mode = 'conllu'
-infiles = ['data/basic.conllu']
+mode = 'nlp_pos'
+infiles = ['data/nlp_pos.txt']
+delimiter = '/'
 
 [export]
 mode = 'flextext'
@@ -12,9 +13,9 @@ in_type = 'sentence'
 out_type = 'phrase'
 
 [[export.mappings]]
-in_feature = 'UD:lemma'
-out_feature = 'FlexText:en:lem'
+in_feature = 'UD:upos'
+out_feature = 'FlexText:en:pos'
 
 [[export.mappings]]
-in_feature = 'UD:sent_id'
-out_feature = 'FlexText:en:sid'
+in_feature = 'UD:form'
+out_feature = 'FlexText:en:txt'

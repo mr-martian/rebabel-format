@@ -6,6 +6,12 @@ sentence
 
 word
 	UD
+		FEATS
+			Definiteness: str
+			Number: str
+			Person: str
+		MISC
+			SpaceAfter: bool
 		deprel: str
 		form: str
 		head: ref
@@ -14,11 +20,5 @@ word
 		null: bool
 		upos: str
 		xpos: str
-	UD/FEATS
-		Definiteness: str
-		Number: str
-		Person: str
-	UD/MISC
-		SpaceAfter: bool
 	meta
 		index: int

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.db import RBBLFile
-from rebabel_format.parameters import Parameter
+from rebabel_format.parameters import Parameter, process_parameters
 import logging
 from collections import defaultdict
 
@@ -10,43 +10,17 @@ ALL_READERS = {}
 class ReaderError(Exception):
     pass
 
-class MetaReader(type):
-    def __new__(cls, name, bases, attrs):
-        global ALL_READERS
-        new_attrs = attrs.copy()
-        ident = attrs.get('identifier')
-        if ident in ALL_READERS:
-            raise ValueError(f'Identifier {ident} is already used by another reader class.')
-        if ident:
-            new_attrs['logger'] = logging.getLogger('reBabel.reader.'+ident)
+class Reader:
+    identifier = None
+    parameters = {}
 
-        parameters = {}
-        for b in bases:
-            parameters.update(getattr(b, 'parameters', {}))
-        for attr, value in attrs.items():
-            if isinstance(value, Parameter):
-                parameters[attr] = value
-                del new_attrs[attr]
-        new_attrs['parameters'] = parameters
-
-        ret = super(MetaReader, cls).__new__(cls, name, bases, new_attrs)
-        if ident is not None:
-            ALL_READERS[ident] = ret
-        return ret
-
-class Reader(metaclass=MetaReader):
     def __init__(self, db, user, conf, kwargs):
         self.db = db
         self.user = user
 
         self.conf = conf
         self.other_args = kwargs
-        for name, parser in self.parameters.items():
-            if name in kwargs:
-                value = parser.process(name, kwargs[name])
-            else:
-                value = parser.extract(conf, 'import', name)
-            setattr(self, name, value)
+        self.parameter_values = process_parameters(self.parameters, conf, 'import', kwargs)
 
         self.known_feats = {}
         self.uids = {}
@@ -55,7 +29,7 @@ class Reader(metaclass=MetaReader):
         self.parents = {}
         self.relations = defaultdict(set)
         self.types = {}
-        self.features = defaultdict(dict) # (tier, feature, type) => value
+        self.features = defaultdict(dict) # (feature, type) => value
 
         self.filename = None
         self.location = None
@@ -65,29 +39,28 @@ class Reader(metaclass=MetaReader):
         self.type_map = {}
         self.feature_map = {}
 
+        self.logger = logging.getLogger('reBabel.reader.'+(self.identifier or 'unnamed_reader'))
+
+    def __init_subclass__(cls, *args, **kwargs):
+        global ALL_READERS
+        super().__init_subclass__(*args, **kwargs)
+        if cls.identifier:
+            if cls.identifier in ALL_READERS:
+                raise ValueError(f'Identifier {cls.identifier} is already used by another Reader class.')
+            ALL_READERS[cls.identifier] = cls
+
     def info(self, msg):
-        try:
-            self.logger.info(msg)
-        except AttributeError:
-            pass
+        self.logger.info(msg)
 
     def warning(self, msg):
-        try:
-            self.logger.warn(msg)
-        except AttributeError:
-            pass
+        self.logger.warn(msg)
 
     def error(self, msg):
         prefix = ', '.join([x for x in [self.filename, self.location] if x])
         if prefix:
             prefix += ': '
-        send = prefix + msg
-        try:
-            self.logger.error(send)
-            send = ''
-        except AttributeError:
-            pass
-        raise ReaderError(send)
+        self.logger.error(prefix+msg)
+        raise ReaderError()
 
     def set_mappings(self, type_map, feat_map):
         self.type_map = type_map
@@ -113,14 +86,14 @@ class Reader(metaclass=MetaReader):
         self._check_name(child_name)
         self.relations[child_name].add(parent_name)
 
-    def set_feature(self, unit_name, tier, feature, ftype, value,
+    def set_feature(self, unit_name, feature: str, ftype: str, value,
                     confidence=None):
         self._check_name(unit_name)
         if ftype == 'ref':
             self._check_name(value)
         else:
             self.db.check_type(ftype, value)
-        self.features[unit_name][(tier, feature, ftype)] = (value, confidence)
+        self.features[unit_name][(feature, ftype)] = (value, confidence)
 
     def finish_block(self, parent_if_missing=None, keep_uids=False):
         parent_type_if_missing = None
@@ -165,18 +138,18 @@ class Reader(metaclass=MetaReader):
         feature_ids = {}
         features = []
         for name in self.id_seq:
-            for (tier, feature, ftype), (value, conf) in self.features[name].items():
-                m_key = ((tier, feature), self.types[name])
-                n_key = ((tier, feature), None)
+            for (feature, ftype), (value, conf) in self.features[name].items():
+                m_key = (feature, self.types[name])
+                n_key = (feature, None)
                 if m_key in self.feature_map:
-                    tier, feature = self.feature_map[m_key]
+                    feature = self.feature_map[m_key]
                 elif n_key in self.feature_map:
-                    tier, feature = self.feature_map[n_key]
-                key = (tier, feature, ftype, self.types[name])
+                    feature = self.feature_map[n_key]
+                key = (feature, ftype, self.types[name])
                 if key in feature_ids:
                     fid = feature_ids[key]
                 else:
-                    fid = self.ensure_feature(self.types[name], tier, feature, ftype)
+                    fid = self.ensure_feature(self.types[name], feature, ftype)
                     feature_ids[key] = fid
                 if ftype == 'ref':
                     value = uids[value]
@@ -199,19 +172,19 @@ class Reader(metaclass=MetaReader):
             self.types = {}
         self.block_count += 1
 
-    def ensure_feature(self, unittype, tier, feature, valuetype):
-        key = (unittype, tier, feature)
+    def ensure_feature(self, unittype, feature, valuetype):
+        key = (unittype, feature)
         if key in self.known_feats:
             return self.known_feats[key]
-        fid, typ = self.db.get_feature(unittype, tier, feature, error=False)
+        fid, typ = self.db.get_feature(unittype, feature, error=False)
         if typ == valuetype:
             self.known_feats[key] = fid
             return fid
         elif typ is not None:
-            self.error(f'Feature {tier}:{feature} for {unittype} already exists with value type {typ}.')
+            self.error(f'Feature {feature} for {unittype} already exists with value type {typ}.')
         else:
-            self.db.create_feature(unittype, tier, feature, valuetype)
-            fid, typ = self.db.get_feature(unittype, tier, feature, error=False)
+            self.db.create_feature(unittype, feature, valuetype)
+            fid, typ = self.db.get_feature(unittype, feature, error=False)
             self.known_feats[key] = fid
             return fid
 

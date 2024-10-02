@@ -16,8 +16,7 @@ CREATE TABLE units(
 
 CREATE TABLE tiers(
        id INTEGER PRIMARY KEY,
-       tier TEXT,
-       feature TEXT,
+       name TEXT,
        unittype TEXT,
        valuetype TEXT,
        CHECK(valuetype = 'int' OR valuetype = 'bool' OR

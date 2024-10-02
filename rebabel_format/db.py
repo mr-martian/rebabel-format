@@ -135,44 +135,43 @@ class RBBLFile:
         return whether it was created.'''
         ex = self.first('SELECT * FROM tiers WHERE unittype = ?', typename)
         if ex is None:
-            self.insert('tiers', ('tier', 'meta'), ('feature', 'active'),
+            self.insert('tiers', ('name', 'meta:active'),
                         ('unittype', typename), ('valuetype', 'bool'))
             return True
         return False
 
-    def create_feature(self, unittype, tier, feature, valuetype):
+    def create_feature(self, unittype, feature, valuetype):
         if valuetype not in ['int', 'bool', 'str', 'ref']:
             raise ValueError('Unknown value type %s.' % valuetype)
         with self.transaction():
             self.ensure_type(unittype)
             # TODO: check if already exists
-            self.insert('tiers', ('tier', tier), ('feature', feature),
+            self.insert('tiers', ('name', feature),
                         ('unittype', unittype), ('valuetype', valuetype))
 
-    def get_feature(self, unittype, tier, feature, error=False):
-        ret = self.first('SELECT id, valuetype FROM tiers WHERE unittype = ? AND tier = ? AND feature = ?', unittype, tier, feature)
+    def get_feature(self, unittype, feature, error=False):
+        ret = self.first('SELECT id, valuetype FROM tiers WHERE unittype = ? AND name = ?', unittype, feature)
         if ret is None:
             if error:
-                raise ValueError('Feature %s:%s does not exist for unit type %s.' % (tier, feature, unittype))
+                raise ValueError('Feature %s does not exist for unit type %s.' % (feature, unittype))
             return None, None
         return ret
 
-    def get_feature_multi_type(self, unittypes, tier, feature, error=False):
+    def get_feature_multi_type(self, unittypes, feature, error=False):
         self.execute_clauses(
             'SELECT id, valuetype FROM tiers',
-            WhereClause('tier', tier),
-            WhereClause('feature', feature),
+            WhereClause('name', feature),
             WhereClause('unittype', unittypes),
         )
         ret = self.cur.fetchall()
         if error and not ret:
-            raise ValueError(f"Feature '{tier}:{feature}' does not exist for unit type {unittypes}.")
+            raise ValueError(f"Feature '{feature}' does not exist for unit type {unittypes}.")
         return ret
 
     def create_unit(self, unittype: str, user=None) -> int:
         with self.transaction():
             self.ensure_type(unittype)
-            meta, _ = self.get_feature(unittype, 'meta', 'active')
+            meta, _ = self.get_feature(unittype, 'meta:active')
             self.insert('units', ('type', unittype), ('created', self.now()),
                         ('modified', self.now()), ('active', True))
             uid = self.cur.lastrowid
@@ -183,8 +182,8 @@ class RBBLFile:
     def create_unit_with_features(self, unittype: str, feats, user, parent=None) -> int:
         with self.transaction():
             uid = self.create_unit(unittype, user)
-            for tier, feat, val in feats:
-                fid, typ = self.get_feature(unittype, tier, feat, error=True)
+            for feat, val in feats:
+                fid, typ = self.get_feature(unittype, feat, error=True)
                 self.check_type(typ, val)
                 self.insert('features', ('unit', uid), ('feature', fid),
                             ('value', val), ('user', user), ('confidence', 1),
@@ -211,10 +210,10 @@ class RBBLFile:
         elif typename in ['int', 'ref'] and not isinstance(value, int):
             raise ValueError()
 
-    def set_feature(self, unitid: int, tier: str, feature: str, value,
+    def set_feature(self, unitid: int, feature: str, value,
                     user: str, confidence: int = 1):
         unittype = self.get_unit_type(unitid)
-        fid, typ = self.get_feature(unittype, tier, feature, error=True)
+        fid, typ = self.get_feature(unittype, feature, error=True)
         self.check_type(typ, value)
         params = {'unit': unitid, 'feature': fid, 'value': value,
                   'user': user, 'confidence': confidence, 'date': self.now()}
@@ -228,12 +227,12 @@ class RBBLFile:
                 params,
             )
 
-    def set_feature_dist(self, unitid: int, tier: str, feature: str,
+    def set_feature_dist(self, unitid: int, feature: str,
                          values, normalize=True):
         if len(values) == 0:
             raise ValueError('The list of values must be non-empty.')
         unittype = self.get_unit_type(unitid)
-        fid, typ = self.get_feature(unittype, tier, feature, error=True)
+        fid, typ = self.get_feature(unittype, feature, error=True)
         total = 0.0
         for v, p in values:
             self.check_type(typ, v)
@@ -320,52 +319,3 @@ class RBBLFile:
                              WhereClause('unit', units),
                              WhereClause('feature', featid))
         return dict(self.cur.fetchall())
-
-class Unit:
-    FeatureCache = {} # (tier, feature, type) => (id, valuetype)
-
-    def __init__(self, db, id):
-        self._db = db
-        self._id = id
-        self._type = self._db.get_unit_type(self._id)
-        self._features = {}
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def type(self):
-        return self._type
-
-    def _get_feature(self, key):
-        tier, feature, id, valuetype = None, None, None, None
-        if isinstance(key, tuple) and len(key) == 2:
-            tier, feature = key
-        elif isinstance(key, str) and ':' in key:
-            tier, feature = key.split(':', 1)
-        elif isinstance(key, int):
-            id = key
-        else:
-            raise ValueError(f"Invalid feature identifier '{key}'.")
-        if tier and feature:
-            cache_key = (tier, feature, self._type)
-            if cache_key in Unit.FeatureCache:
-                id, valuetype = Unit.FeatureCache[cache_key]
-            else:
-                id, valuetype = self._db.get_feature(self._type, tier, feature,
-                                                     error=True)
-                Unit.FeatureCache[cache_key] = (id, valuetype)
-        return id, valuetype
-
-    def __getitem__(self, key):
-        id, valuetype = self._get_feature(key)
-        if id in self._features:
-            value = self._features[id]
-        else:
-            value = self._db.get_feature_value(self._id, id)
-            self._features[id] = value
-        if valuetype == 'ref':
-            return Unit(self._db, value)
-        else:
-            return value

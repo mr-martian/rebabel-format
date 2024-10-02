@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from rebabel_format.process import Process
-from rebabel_format.parameters import Parameter, FeatureParameter, QueryParameter
+from rebabel_format.parameters import Parameter, QueryParameter
 from rebabel_format.query import ResultTable
 from collections import Counter
 
@@ -17,7 +17,7 @@ class Distribution(Process):
     center = Parameter(default='Center', help='the element of the pattern which is the parent of the units being counted')
     child_type = Parameter(type=str, help='the type of the units being counted')
     child_print = Parameter(type=list, help='the features to count')
-    sort = FeatureParameter(default='meta:index', help='the feature to use for sorting')
+    sort = Parameter(default='meta:index', type=str, help='the feature to use for sorting')
     include = Parameter(default=[], type=list, help='features from the pattern to include when counting')
 
     def display_unit(self, features):

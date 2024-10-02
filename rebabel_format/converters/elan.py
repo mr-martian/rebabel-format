@@ -106,10 +106,10 @@ class EAFReader(XMLReader):
                             if index:
                                 index_val[name] += 1
                                 self.set_feature(
-                                    xmlid, 'alignment', 'index', 'int',
+                                    xmlid, 'alignment:index', 'int',
                                     index_val[name])
                             name = xmlid
-                        self.set_feature(name, 'ELAN', tier_name, 'str', t)
+                        self.set_feature(name, 'ELAN:'+tier_name, 'str', t)
                     self.names[xmlid] = name
                 elif ann.tag == 'ALIGNABLE_ANNOTATION':
                     t = self.annotation_text(ann)
@@ -125,10 +125,10 @@ class EAFReader(XMLReader):
                                 break
                     self.names[i] = i
                     self.set_type(i, tier_name)
-                    self.set_feature(i, 'alignment', 'starttime', 'int', s)
-                    self.set_feature(i, 'alignment', 'endtime', 'int', e)
+                    self.set_feature(i, 'alignment:starttime', 'int', s)
+                    self.set_feature(i, 'alignment:endtime', 'int', e)
                     if t is not None:
-                        self.set_feature(i, 'ELAN', tier_name, 'str', t)
+                        self.set_feature(i, 'ELAN:'+tier_name, 'str', t)
 
 class EAFWriter(Writer):
     identifier = 'elan'
@@ -156,18 +156,17 @@ class EAFWriter(Writer):
                 }
 
     def write(self, fout):
-        feat_ids = {}
+        feat_names = {}
         for name in self.query_order:
             main = ['ELAN:'+name]
             if self.tiers[name].aligned:
                 main += ['alignment:starttime', 'alignment:endtime']
-            mids = self.table.add_features(name, main, error=False)
             feats = []
             for tier in self.tiers.values():
                 if tier.parent == name and tier.relation == 'Symbolic_Association':
                     feats.append('ELAN:'+tier.name)
-            fids = self.table.add_features(name, feats, error=False)
-            feat_ids[name] = dict(zip(main, mids)), list(zip(feats, fids))
+            self.table.add_features(name, main+feats, error=False)
+            feat_names[name] = feats
         parent_annotations = {}
         times = {0}
         ann_count = 0
@@ -177,15 +176,15 @@ class EAFWriter(Writer):
                     if uid in parent_annotations or uid is None:
                         continue
                     feat_values = result_feats[uid]
-                    main, feats = feat_ids[name]
+                    feats = feat_names[name]
                     ann_count += 1
                     ann_id = f'ann{ann_count}'
                     parent_annotations[uid] = ann_id
 
                     ann1 = ET.SubElement(self.tiers[name].node, 'ANNOTATION')
                     if self.tiers[name].aligned:
-                        start = feat_values.get(main.get('alignment:starttime'))
-                        end = feat_values.get(main.get('alignment:endtime'))
+                        start = feat_values.get('alignment:starttime')
+                        end = feat_values.get('alignment:endtime')
                         if start is None:
                             if not end:
                                 start = max(times)
@@ -212,12 +211,11 @@ class EAFWriter(Writer):
                                 if prev[0].attrib['ANNOTATION_REF'] == pref:
                                     ann2.attrib['PREVIOUS_ANNOTATION'] = prev[0].attrib['ANNOTATION_ID']
                     ann3 = ET.SubElement(ann2, 'ANNOTATION_VALUE')
-                    content = feat_values.get(main.get('ELAN:'+name))
+                    content = feat_values.get('ELAN:'+name)
                     if content is not None:
                         ann3.text = str(content)
 
-                    for feat, fid in feats:
-                        value = feat_values.get(fid)
+                    for feat, value in feat_values.items():
                         if value is None:
                             continue
                         feat_name = feat[5:]

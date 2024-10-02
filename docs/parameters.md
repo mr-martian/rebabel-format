@@ -38,10 +38,6 @@ In either case, methods on `SomeWriter` can simply refer to `self.warn_on_invali
 - `type`: the type that a provided value must be (according to `isinstance`)
 - `help`: the documentation string for this parameter
 
-## `FeatureParameter`
-
-The input to this parameter type should specify a tier name and feature name. This can be done as a string (`"tier:feature"`), as a dictionary (`{"tier": tier, "feature": feature}`), or as an iterable of length 2 (`[tier, feature]`). It will be normalized to a tuple (`(tier, feature)`).
-
 ## `QueryParameter`
 
 Input to this parameter should be a dictionary which is checked to ensure that it is a valid query.

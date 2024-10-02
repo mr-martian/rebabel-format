@@ -27,7 +27,7 @@ class NLPPartOfSpeechReader(LineReader):
         """placeholder docstring"""
         if self.id_seq:
             self.set_type("sentence", "sentence")
-            self.set_feature("sentence", "meta", "index", "int", self.block_count)
+            self.set_feature("sentence", "meta:index", "int", self.block_count)
         super().end()
 
     def process_line(self, line: str):
@@ -45,10 +45,10 @@ class NLPPartOfSpeechReader(LineReader):
 
             self.set_type(index_as_string, "word")
             self.set_parent(index_as_string, "sentence")
-            self.set_feature(index_as_string, "UD", "id", "str", index_as_string)
+            self.set_feature(index_as_string, "UD:id", "str", index_as_string)
 
             self.word_idx += 1
 
-            self.set_feature(index_as_string, "meta", "index", "int", self.word_idx)
-            self.set_feature(index_as_string, "UD", "form", "str", word)
-            self.set_feature(index_as_string, "UD", "upos", "str", part_of_speech)
+            self.set_feature(index_as_string, "meta:index", "int", self.word_idx)
+            self.set_feature(index_as_string, "UD:form", "str", word)
+            self.set_feature(index_as_string, "UD:upos", "str", part_of_speech)
