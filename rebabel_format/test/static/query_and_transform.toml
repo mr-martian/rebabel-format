@@ -1,0 +1,99 @@
+[import]
+mode = 'conllu'
+infiles = ['data/basic.conllu']
+
+[transform]
+sequence = ['startswith', 'endswith', 'contains', 'notcontains', 'lt', 'gte']
+
+[transform.startswith.query.W]
+type = 'word'
+features = [{feature = 'UD:lemma', value_startswith = 's'}]
+
+[[transform.startswith.commands]]
+type = 'create_feature'
+feature = 'UD:MISC:StartsWithS'
+value_type = 'bool'
+unit_type = 'word'
+
+[[transform.startswith.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:StartsWithS'
+value = true
+
+[transform.endswith.query.W]
+type = 'word'
+features = [{feature = 'UD:lemma', value_endswith = 'man'}]
+
+[[transform.endswith.commands]]
+type = 'create_feature'
+feature = 'UD:MISC:EndsWithMan'
+value_type = 'bool'
+unit_type = 'word'
+
+[[transform.endswith.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:EndsWithMan'
+value = true
+
+[transform.contains.query.W]
+type = 'word'
+features = [{feature = 'UD:lemma', value_contains = 'n'}]
+
+[[transform.contains.commands]]
+type = 'create_feature'
+feature = 'UD:MISC:ContainsN'
+value_type = 'bool'
+unit_type = 'word'
+
+[[transform.contains.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:ContainsN'
+value = true
+
+[transform.notcontains.query.W]
+type = 'word'
+features = [{feature = 'UD:lemma', value_notcontains = 'n'}]
+
+[[transform.notcontains.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:ContainsN'
+value = false
+
+[transform.lt.query.W]
+type = 'word'
+features = [{feature = 'meta:index', value_lt = 3}]
+
+[[transform.lt.commands]]
+type = 'create_feature'
+feature = 'UD:MISC:LT3'
+value_type = 'bool'
+unit_type = 'word'
+
+[[transform.lt.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:LT3'
+value = true
+
+[transform.gte.query.W]
+type = 'word'
+features = [{feature = 'meta:index', value_gte = 3}]
+
+[[transform.gte.commands]]
+type = 'create_feature'
+feature = 'UD:MISC:GTE3'
+value_type = 'bool'
+unit_type = 'word'
+
+[[transform.gte.commands]]
+type = 'set_feature'
+target = 'W'
+feature = 'UD:MISC:GTE3'
+value = true
+
+[export]
+mode = 'conllu'
