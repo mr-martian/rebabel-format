@@ -1,5 +1,9 @@
 # rebabel-format
-Python library for interacting with reBabel data files
+
+reBabel is a library for converting between various language data files, such as ELAN `.eaf` files, Fieldworks Language Explorer `flextext` files, Universal Dependencies `.conllu` files, and others.
+Rather than create a separate converter for each pair of formats, it goes through an intermediary representation using a SQLite database and thus needs only one importer and one exporter for each file format.
+
+reBabel also provides other functionality, including merging data from different sources (say, from manual annotation and from a machine learning model), and a query and rewrite system.
 
 ## Installation
 
@@ -8,6 +12,8 @@ To install this package locally, run
 ```bash
 $ pip3 install -e .
 ```
+
+This package is written in pure Python and has no external dependencies apart from backports of standard library modules to older Python versions.
 
 ## Command-Line Usage
 
