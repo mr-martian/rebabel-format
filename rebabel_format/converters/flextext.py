@@ -29,19 +29,15 @@ class FlextextReader(XMLReader):
     long_name = 'SIL Fieldworks Language Explorer XML glossed text'
     format_specification = 'https://github.com/sillsdev/FieldWorks/blob/release/9.1/DistFiles/Language%20Explorer/Export%20Templates/Interlinear/FlexInterlinear.xsd'
 
-    ignore_guid = Parameter(default=False, type=bool, help="don't use guid as a unique ID field")
-
     def read_file(self, fin):
-        self.iter_nodes(fin)
+        self.iter_nodes(fin, ())
         self.finish_block()
 
     def iter_nodes(self, node, parent=None, idx=0):
         known = ['interlinear-text', 'paragraph', 'phrase', 'word', 'morph',
                  'scrMilestone', 'language', 'media']
         if node.tag in known:
-            name = (parent or '') + ' ' + str(idx)
-            if not self.ignore_guid:
-                name = node.attrib.get('guid') or name
+            name = parent + (idx,)
             self.set_type(name, node.tag)
             if parent:
                 self.set_parent(name, parent)
@@ -68,7 +64,7 @@ class FlextextReader(XMLReader):
                     chidx += 1
                     self.iter_nodes(ch, parent=name, idx=chidx)
         else:
-            if parent is not None:
+            if parent:
                 for feat, val in node.attrib.items():
                     self.set_feature(parent, 'FlexText:'+feat, 'str', val)
             for i, ch in enumerate(node, 1):
