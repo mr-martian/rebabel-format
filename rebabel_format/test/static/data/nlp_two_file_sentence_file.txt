@@ -1,0 +1,2 @@
+The dog barked .
+The cat meowed .
