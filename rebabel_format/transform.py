@@ -61,6 +61,46 @@ class SetRefFeature(SetFeature):
         db.set_feature(match_dict[self.target], self.feature, match_dict[self.value],
                        user=self.username, confidence=self.confidence)
 
+class CopyFeature(Transformation):
+    name = 'copy_feature'
+
+    target = Parameter(type=str)
+    target_feature = Parameter(type=str)
+    source = Parameter(type=str)
+    source_feature = Parameter(type=str)
+    add = Parameter(type=int, required=False)
+    append = Parameter(type=str, required=False)
+    prepend = Parameter(type=str, required=False)
+    username = Parameter(type=str)
+    confidence = Parameter(type=int, default=1)
+
+    def apply(self, db, match_dict):
+        if self.target not in match_dict:
+            raise ValueError(f'No such unit {self.target}.')
+        if self.source not in match_dict:
+            raise ValueError(f'No such unit {self.source}.')
+        val = db.get_feature_value_by_name(match_dict[self.source], self.source_feature)
+        if isinstance(val, int) and self.add is not None:
+            val += self.add
+        elif isinstance(val, str):
+            if self.prepend is not None:
+                val = self.prepend + val
+            if self.append is not None:
+                val += self.append
+        db.set_feature(match_dict[self.target], self.target_feature, val,
+                       user=self.username, confidence=self.confidence)
+
+class RemFeature(Transformation):
+    name = 'remove_feature'
+
+    target = Parameter(type=str)
+    feature = Parameter(type=str)
+
+    def apply(self, db, match_dict):
+        if self.target not in match_dict:
+            raise ValueError(f'No such unit {self.target}.')
+        db.rem_feature(match_dict[self.target], self.feature)
+
 class CreateUnit(Transformation):
     name = 'create_unit'
 
@@ -71,6 +111,18 @@ class CreateUnit(Transformation):
     def apply(self, db, match_dict):
         match_dict[self.unit_name] = db.create_unit(self.unit_type,
                                                     user=self.username)
+
+class RemUnit(Transformation):
+    name = 'remove_unit'
+
+    target = Parameter(type=str)
+    username = Parameter(type=str)
+
+    def apply(self, db, match_dict):
+        if self.target not in match_dict:
+            raise ValueError(f'No such unit {self.target}.')
+        db.rem_unit(match_dict[self.target], self.username)
+        del match_dict[self.target]
 
 class EditRelation(Transformation):
     parent = Parameter(type=str)

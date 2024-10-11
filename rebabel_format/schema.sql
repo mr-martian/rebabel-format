@@ -61,6 +61,13 @@ CREATE TRIGGER edit BEFORE UPDATE ON features
                OLD.date, NEW.date);
         UPDATE units SET modified = NEW.date WHERE id = NEW.unit;
        END;
+CREATE TRIGGER del BEFORE DELETE ON features
+       BEGIN
+        INSERT INTO history VALUES
+               (OLD.unit, OLD.feature, OLD.value, OLD.user, OLD.confidence,
+               OLD.date, datetime('now'));
+        UPDATE units SET modified = datetime('now') WHERE id = OLD.unit;
+       END;
 
 -- types are redundant with units table, but it might simplify some
 -- queries to duplicate that information (and it's not too much)
