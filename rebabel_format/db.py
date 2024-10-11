@@ -8,6 +8,8 @@ import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
+import re
+from rebabel_format import utils
 
 def load_schema():
     try:
@@ -26,21 +28,50 @@ sql.register_converter('bool', lambda b: False if b == b'0' else True)
 class WhereClause:
     variable: str
     value: Any
-    operator: str = '='
-    suffix: str = None
+    operator: str = 'is'
+    negated: bool = False
+
+    like_escape = re.compile('([%_$])')
+
+    def single_clause(self, val):
+        op_map = {
+            'lt': '<',
+            'lte': '<=',
+            'gt': '>',
+            'gte': '>=',
+        }
+        if self.operator in ['startswith', 'endswith', 'contains']:
+            esc = ''
+            if '%' in val or '_' in val:
+                val = self.like_escape.sub(r'$\1', val)
+                esc = " ESCAPE '$'"
+            if self.operator in ['startswith', 'contains']:
+                val += '%'
+            if self.operator in ['contains', 'endswith']:
+                val = '%' + val
+            return 'LIKE ?'+esc, val
+        elif self.operator in op_map:
+            return op_map[self.operator] + ' ?', val
+        else:
+            raise ValueError(f"Unknown operator '{self.operator}'.")
 
     def toSQL(self):
-        suf = ' ' + self.suffix if self.suffix else ''
-        if isinstance(self.value, list):
-            qs = ', '.join(['?']*len(self.value))
-            list_ops = {
-                '=': 'IN',
-            }
-            if self.operator not in list_ops:
-                raise ValueError(f'Cannot use operator {self.operator} with list value.')
-            return f'{self.variable} {list_ops[self.operator]} ({qs}){suf}', self.value
+        neg = 'NOT ' if self.negated else ''
+
+        if self.operator == 'is':
+            if isinstance(self.value, list):
+                qs = ', '.join(['?']*len(self.value))
+                return f'{self.variable} {neg}IN ({qs})', self.value
+            else:
+                return f'{self.variable} IS{neg} ?', [self.value]
         else:
-            return f'{self.variable} {self.operator} ?{suf}', [self.value]
+            clauses = []
+            escaped_values = []
+            for val in utils.as_list(self.value):
+                c, v = self.single_clause(val)
+                clauses.append(self.variable + ' ' + c)
+                escaped_values.append(v)
+            return f'{neg}({" OR ".join(clauses)})', escaped_values
 
 class RBBLFile:
     @contextlib.contextmanager
