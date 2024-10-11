@@ -47,7 +47,7 @@ class FlextextReader(XMLReader):
                 if feat in ['chapter', 'verse']:
                     typ = 'int'
                     val = int(val)
-                self.set_feature(name, 'FlexText', feat, typ, val)
+                self.set_feature(name, 'FlexText:'+feat, typ, val)
             chidx = 0
             for ch in node:
                 if ch.tag == 'item':

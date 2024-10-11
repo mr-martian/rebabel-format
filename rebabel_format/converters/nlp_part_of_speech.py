@@ -30,14 +30,15 @@ class NLPPartOfSpeechReader(LineReader):
         line -- a word and its part of speech separated by a delimiter (ex: jumped/VERB)
         """
 
-        for index, word_part_of_speech_pair in enumerate(line.split(), 1):
-            word, part_of_speech = word_part_of_speech_pair.split(self.delimiter)
+        for index, item in enumerate(line.split(), 1):
+            pieces = item.split(self.delimiter)
 
             self.set_type(index, "word")
             self.set_parent(index, "sentence")
             self.set_feature(index, "meta:index", "int", index)
-            self.set_feature(index, "nlp:form", "str", word)
-            self.set_feature(index, "nlp:pos", "str", part_of_speech)
+            self.set_feature(index, "nlp:form", "str", pieces[0])
+            if len(pieces) > 1:
+                self.set_feature(index, "nlp:pos", "str", pieces[1])
 
         if line:
             self.set_type('sentence', 'sentence')
