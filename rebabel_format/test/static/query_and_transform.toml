@@ -1,6 +1,6 @@
 [import]
 mode = 'conllu'
-infiles = ['data/basic.conllu']
+infiles = ['../data/basic.conllu']
 
 [transform]
 sequence = ['startswith', 'endswith', 'contains', 'notcontains', 'lt', 'gte']

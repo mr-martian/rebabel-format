@@ -1,6 +1,6 @@
 [import]
 mode = 'nlp_pos'
-infiles = ['data/nlp_pos.txt']
+infiles = ['../data/nlp_pos.txt']
 delimiter = '/'
 
 [export]
