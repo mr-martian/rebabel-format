@@ -1,7 +1,7 @@
 [import]
 mode = 'nlp_pos'
-infiles = ['../data/nlp_pos.txt']
-delimiter = '/'
+infiles = ['../data/nlp_pos_file.txt']
+nlpFileType = 'pos'
 
 [export]
 mode = 'flextext'
@@ -15,7 +15,3 @@ out_type = 'phrase'
 [[export.mappings]]
 in_feature = 'nlp:pos'
 out_feature = 'FlexText:en:pos'
-
-[[export.mappings]]
-in_feature = 'nlp:form'
-out_feature = 'FlexText:en:txt'

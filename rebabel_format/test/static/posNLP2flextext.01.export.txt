@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<document version="2">
+  <interlinear-text>
+    <paragraphs>
+      <paragraph>
+        <phrases>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="pos">DET</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">NOUN</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">VERB</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">PUNC</item>
+              </word>
+            </words>
+          </phrase>
+          <phrase>
+            <words>
+              <word>
+                <item lang="en" type="pos">DET</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">NOUN</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">VERB</item>
+              </word>
+              <word>
+                <item lang="en" type="pos">PUNC</item>
+              </word>
+            </words>
+          </phrase>
+        </phrases>
+      </paragraph>
+    </paragraphs>
+  </interlinear-text>
+</document>
