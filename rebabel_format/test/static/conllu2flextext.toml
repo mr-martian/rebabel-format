@@ -1,6 +1,6 @@
 [import]
 mode = 'conllu'
-infiles = ['data/basic.conllu']
+infiles = ['../data/basic.conllu']
 
 [export]
 mode = 'flextext'

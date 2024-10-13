@@ -45,11 +45,7 @@ class NLPPartOfSpeechReader(LineReader):
     identifier = "nlp_pos"
     delimiter = Parameter(default="/", type=str)
     include_boundaries = True
-    nlpFileType = Parameter(type=str, help="Must be 'language', 'pos', or 'combined'")
-
-    def __post_init__(self):
-        if self.nlpFileType not in ["language", "pos", "combined"]:
-            raise ValueError("nlpFileType parameter must be 'language', 'pos', or 'combined'")
+    nlpFileType = Parameter(type=str, choices=["language", "pos", "combined"])
 
     def is_boundary(self, line):
         return True

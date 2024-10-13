@@ -227,6 +227,20 @@ class RBBLFile:
                             ('date', self.now()))
             return uid
 
+    def rem_unit(self, unitid: int, user: str):
+        with self.transaction():
+            params = {'active': False, 'unit': unitid}
+            self.cur.execute(
+                'UPDATE relations SET active = :active WHERE parent = :unit OR child = :unit',
+                params,
+            )
+            # TODO: why do we have both unit.active and meta:active?
+            self.cur.execute(
+                'UPDATE units SET active = :active WHERE id = :unit',
+                params,
+            )
+            self.set_feature(unitid, 'meta:active', False, user)
+
     def get_unit_type(self, unitid: int) -> str:
         ret = self.first('SELECT type FROM units WHERE id = ?', unitid)
         if ret is None:
@@ -277,6 +291,14 @@ class RBBLFile:
                 self.insert('suggestions', ('unit', unitid), ('feature', fid),
                             ('value', v), ('date', self.now()),
                             ('probability', p/total), ('active', True))
+
+    def rem_feature(self, unitid: int, feature: str):
+        unittype = self.get_unit_type(unitid)
+        fid, typ = self.get_feature(unittype, feature, error=True)
+        self.cur.execute(
+            'DELETE FROM features WHERE unit = :unit AND feature = :feature',
+            {'unit': unitid, 'feature': fid},
+        )
 
     def rem_parent(self, parent: int, child: int, primary_only=False):
         qr = 'UPDATE relations SET active = ? WHERE parent = ? AND child = ?'
@@ -350,3 +372,13 @@ class RBBLFile:
                              WhereClause('unit', units),
                              WhereClause('feature', featid))
         return dict(self.cur.fetchall())
+
+    def get_feature_value_by_name(self, unitid: int, feature: str):
+        unittype = self.get_unit_type(unitid)
+        fid, typ = self.get_feature(unittype, feature, error=True)
+        ret = self.first_clauses('SELECT value FROM features',
+                                 WhereClause('unit', unitid),
+                                 WhereClause('feature', fid))
+        if ret is not None:
+            return ret[0]
+        return ret

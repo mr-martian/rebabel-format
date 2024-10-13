@@ -1,6 +1,6 @@
 [import]
 mode = 'nlp_pos'
-infiles = ['data/nlp_combined_pos.txt']
+infiles = ['../data/nlp_combined_pos.txt']
 nlpFileType = 'combined'
 delimiter = '/'
 

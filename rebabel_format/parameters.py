@@ -2,7 +2,7 @@
 
 from rebabel_format.config import get_single_param, parse_mappings
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional, Sequence
 
 @dataclass
 class Parameter:
@@ -10,6 +10,7 @@ class Parameter:
     default: Any = None
     type: type = None
     help: str = 'a parameter'
+    choices: Optional[Sequence[Any]] = None
 
     name = None
 
@@ -39,6 +40,8 @@ class Parameter:
         else:
             if self.type and not isinstance(value, self.type):
                 raise ValueError(f"Parameter '{name}' should be {self.type} but it is {type(value)}.")
+            if self.choices and value not in self.choices:
+                raise ValueError(f"Parameter '{name}' should be one of {', '.join(map(str, self.choices))}.")
         return value
 
     def extract(self, conf, action, attribute):

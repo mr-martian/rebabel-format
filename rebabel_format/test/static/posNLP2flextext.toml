@@ -1,6 +1,6 @@
 [import]
 mode = 'nlp_pos'
-infiles = ['data/nlp_pos_file.txt']
+infiles = ['../data/nlp_pos_file.txt']
 nlpFileType = 'pos'
 
 [export]
