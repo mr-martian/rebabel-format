@@ -43,8 +43,8 @@ class NLPPartOfSpeechReader(LineReader):
     """
 
     identifier = "nlp_pos"
-    delimiter = Parameter(default="/", type=str)
     include_boundaries = True
+    delimiter = Parameter(default="/", type=str)
     nlpFileType = Parameter(type=str, choices=["language", "pos", "combined"])
 
     def is_boundary(self, line):
@@ -53,7 +53,7 @@ class NLPPartOfSpeechReader(LineReader):
     def process_line(self, line: str):
         """Process one line of the file at a time."""
 
-        for index, item in enumerate(line.split(), 1):
+        for index, item in enumerate(line.strip().split(), 1):
             self.set_type(index, "word")
             self.set_parent(index, "sentence")
             self.set_feature(index, "meta:index", "int", index)
@@ -69,4 +69,4 @@ class NLPPartOfSpeechReader(LineReader):
 
         if line:
             self.set_type('sentence', 'sentence')
-            self.set_feature('sentence', 'meta:index', 'int', self.block_count + 1)
+            self.set_feature('sentence', 'meta:index', 'int', self.block_count)

@@ -50,7 +50,7 @@ class ConnluReader(LineReader):
     def end(self):
         if self.id_seq:
             self.set_type('sentence', 'sentence')
-            self.set_feature('sentence', 'meta:index', 'int', self.block_count)
+            self.set_feature('sentence', 'meta:index', 'int', self.block_count+1)
         super().end()
 
     def process_line(self, line):

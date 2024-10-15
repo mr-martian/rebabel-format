@@ -66,43 +66,96 @@ class StaticTests(unittest.TestCase):
             for fname in glob.glob('*.toml'):
                 self.single_test(fname[:-5])
 
-class MergeTest(unittest.TestCase):
+class SimpleTest:
     def runTest(self):
+        db_name = self.__class__.__name__ + '.db'
         with data_dir(''):
-            if os.path.isfile('merge.db'):
-                os.remove('merge.db')
-            run_command('import', {}, infiles=['data/merge_text.flextext'],
-                        mode='flextext', db='merge.db')
-            run_command('import', {}, infiles=['data/merge_pos.flextext'],
-                        mode='flextext', db='merge.db',
-                        merge_on={
-                            'interlinear-text': 'meta:index',
-                            'paragraph': 'meta:index',
-                            'phrase': 'meta:index',
-                            'word': 'meta:index',
-                        })
+            if os.path.isfile(db_name):
+                os.remove(db_name)
+            self.commands(db_name)
             from rebabel_format.db import RBBLFile
-            from rebabel_format.query import ResultTable
-            db = RBBLFile('merge.db')
-            table = ResultTable(db,
-                                {
-                                    'phrase': {'type': 'phrase'},
-                                    'word': {'type': 'word', 'parent': 'phrase'},
-                                },
-                                order=['phrase', 'word'])
-            table.add_features('phrase', ['FlexText:en:segnum', 'meta:index'])
-            table.add_features('word', ['FlexText:en:txt', 'FlexText:en:pos',
-                                        'meta:index'])
-            results = list(table.results())
-            self.assertEqual(8, len(results))
-            first = set(x[0]['phrase'] for x in results[:4])
-            self.assertEqual(1, len(first))
-            second = set(x[0]['phrase'] for x in results[:4])
-            self.assertEqual(1, len(second))
-            expected = [
-                ('The', 'DET'), ('man', 'NOUN'), ('snores', 'VERB'), ('.', 'PUNCT'),
-                ('The', 'DET'), ('woman', 'NOUN'), ('sings', 'VERB'), ('.', 'PUNCT'),
-            ]
-            for exp, (nodes, features) in zip(expected, results):
-                self.assertEqual(exp[0], features[nodes['word']]['FlexText:en:txt'])
-                self.assertEqual(exp[1], features[nodes['word']]['FlexText:en:pos'])
+            db = RBBLFile(db_name)
+            self.checks(db)
+
+class FlexTextMergeTest(SimpleTest, unittest.TestCase):
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/merge_text.flextext'],
+                    mode='flextext', db=db_name)
+        run_command('import', {}, infiles=['data/merge_pos.flextext'],
+                    mode='flextext', db=db_name,
+                    merge_on={
+                        'interlinear-text': 'meta:index',
+                        'paragraph': 'meta:index',
+                        'phrase': 'meta:index',
+                        'word': 'meta:index',
+                    })
+
+    def checks(self, db):
+        from rebabel_format.query import ResultTable
+        table = ResultTable(db,
+                            {
+                                'phrase': {'type': 'phrase'},
+                                'word': {'type': 'word', 'parent': 'phrase'},
+                            },
+                            order=['phrase', 'word'])
+        table.add_features('phrase', ['FlexText:en:segnum', 'meta:index'])
+        table.add_features('word', ['FlexText:en:txt', 'FlexText:en:pos',
+                                    'meta:index'])
+        results = list(table.results())
+        self.assertEqual(8, len(results))
+        first = set(x[0]['phrase'] for x in results[:4])
+        self.assertEqual(1, len(first))
+        second = set(x[0]['phrase'] for x in results[:4])
+        self.assertEqual(1, len(second))
+        expected = [
+            ('The', 'DET'), ('man', 'NOUN'), ('snores', 'VERB'), ('.', 'PUNCT'),
+            ('The', 'DET'), ('woman', 'NOUN'), ('sings', 'VERB'), ('.', 'PUNCT'),
+        ]
+        for exp, (nodes, features) in zip(expected, results):
+            self.assertEqual(exp[0], features[nodes['word']]['FlexText:en:txt'])
+            self.assertEqual(exp[1], features[nodes['word']]['FlexText:en:pos'])
+
+class ConlluNLPMergeTest(SimpleTest, unittest.TestCase):
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/basic.conllu'], mode='conllu',
+                    db=db_name)
+        run_command('import', {}, infiles=['data/basic.conllu.nlp_apertium.txt'],
+                    mode='nlp_pos', db=db_name, nlpFileType='combined',
+                    merge_on={
+                        'sentence': 'meta:index',
+                        'word': 'meta:index',
+                    })
+
+    def checks(self, db):
+        from rebabel_format.query import ResultTable
+        table = ResultTable(db,
+                            {
+                                'sentence': {'type': 'sentence'},
+                                'word': {'type': 'word', 'parent': 'sentence'},
+                            },
+                            order=['sentence', 'word'])
+        table.add_features('sentence', ['UD:sent_id', 'meta:index'])
+        table.add_features('word', ['UD:form', 'UD:upos', 'nlp:form', 'nlp:pos',
+                                    'meta:index'])
+
+        results = list(table.results())
+        self.assertEqual(8, len(results))
+        self.assertEqual(1, len(set(x[0]['sentence'] for x in results[:4])))
+        self.assertEqual(1, len(set(x[0]['sentence'] for x in results[4:])))
+
+        expected = [
+            {'meta:index': 1, 'UD:form': 'The', 'UD:upos': 'DET', 'nlp:form': 'The', 'nlp:pos': 'det'},
+            {'meta:index': 2, 'UD:form': 'man', 'UD:upos': 'NOUN', 'nlp:form': 'man', 'nlp:pos': 'n'},
+            {'meta:index': 3, 'UD:form': 'snores', 'UD:upos': 'VERB', 'nlp:form': 'snores', 'nlp:pos': 'vblex'},
+            {'meta:index': 4, 'UD:form': '.', 'UD:upos': 'PUNCT', 'nlp:form': '.', 'nlp:pos': 'sent'},
+            {'meta:index': 1, 'UD:form': 'The', 'UD:upos': 'DET', 'nlp:form': 'The', 'nlp:pos': 'det'},
+            {'meta:index': 2, 'UD:form': 'woman', 'UD:upos': 'NOUN', 'nlp:form': 'woman', 'nlp:pos': 'n'},
+            {'meta:index': 3, 'UD:form': 'sings', 'UD:upos': 'VERB', 'nlp:form': 'sings', 'nlp:pos': 'vblex'},
+            {'meta:index': 4, 'UD:form': '.', 'UD:upos': 'PUNCT', 'nlp:form': '.', 'nlp:pos': 'sent'},
+        ]
+        for (units, features), exp in zip(results, expected):
+            fdict = features[units['word']]
+            self.assertEqual(len(exp), len(fdict))
+            for k in exp:
+                self.assertIn(k, fdict)
+                self.assertEqual(exp[k], fdict[k])
