@@ -42,4 +42,4 @@ class NLPPartOfSpeechReader(LineReader):
 
         if line:
             self.set_type('sentence', 'sentence')
-            self.set_feature('sentence', 'meta:index', 'int', self.block_count+1)
+            self.set_feature('sentence', 'meta:index', 'int', self.block_count)
