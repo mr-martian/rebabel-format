@@ -1,0 +1,2 @@
+The/det man/n snores/vblex ./sent
+The/det woman/n sings/vblex ./sent

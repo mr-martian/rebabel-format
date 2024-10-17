@@ -174,7 +174,7 @@ class Reader:
 
             # 4. Remove correspondences which don't match existing
             # parent-child links
-            todo = sorted(merge_possible.keys())
+            todo = sorted(merge_possible.keys(), key=repr)
             while todo:
                 next_todo = []
                 for name in todo:
