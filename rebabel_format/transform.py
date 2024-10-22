@@ -30,8 +30,19 @@ class CreateFeature(Transformation):
     feature = Parameter(type=str)
     value_type = Parameter(type=str)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.done = False
+
     def apply(self, db, match_dict):
-        db.create_feature(self.unit_type, self.feature, self.value_type)
+        if not self.done:
+            fid, ftype = db.get_feature(self.unit_type, self.feature)
+            if ftype is not None:
+                if ftype != self.value_type:
+                    raise ValueError(f'Feature {self.feature} already exists for unit type {self.unit_type} but has value type {ftype} rather than {self.value_type}.')
+                return
+            db.create_feature(self.unit_type, self.feature, self.value_type)
+            self.done = True
 
 class SetFeature(Transformation):
     name = 'set_feature'
