@@ -52,7 +52,7 @@ class CSVWriter(Writer):
 
         for nodes, features in self.table.results():
             i = nodes['entry']
-            dct = {t:features[i]['csv:'+t] for t in tier_names}
+            dct = {t:features[i].get('csv:'+t) for t in tier_names}
             if self.includeid:
                 dct['ID'] = i
             writer.writerow(dct)
