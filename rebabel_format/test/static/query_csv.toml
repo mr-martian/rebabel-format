@@ -1,0 +1,8 @@
+[import]
+mode = 'csv'
+infiles = ['../data/dictionary.csv']
+
+[query.E]
+type = 'entry'
+features = [{feature = 'csv:lemma', value_endswith = 'ium'}]
+print = ['csv:lemma', 'csv:POS']

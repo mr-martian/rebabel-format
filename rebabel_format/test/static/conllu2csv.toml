@@ -1,0 +1,18 @@
+[import]
+mode = 'conllu'
+infiles = ['../data/basic.conllu']
+
+[export]
+mode = 'csv'
+
+[[export.mappings]]
+in_type = 'word'
+out_type = 'entry'
+
+[[export.mappings]]
+in_feature = 'UD:lemma'
+out_feature = 'csv:lemma'
+
+[[export.mappings]]
+in_feature = 'UD:upos'
+out_feature = 'csv:pos'

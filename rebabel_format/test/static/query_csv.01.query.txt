@@ -1,0 +1,9 @@
+Result 1
+E 1
+	csv:lemma   	strontium
+	csv:POS     	N
+
+Result 2
+E 5
+	csv:lemma   	helium
+	csv:POS     	N
