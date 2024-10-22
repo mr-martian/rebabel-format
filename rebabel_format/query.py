@@ -297,7 +297,7 @@ def map_query(query, type_map, feat_map):
             v['order'] = map_feat(v['order'], oldtypes)
         if 'features' in v:
             for dct in v['features']:
-                dct['feature'] = map_feat(dct, oldtypes)
+                dct['feature'] = map_feat(dct['feature'], oldtypes)
 
 class ResultTable:
     def __init__(self, db, query, order=None, type_map=None, feat_map=None):
