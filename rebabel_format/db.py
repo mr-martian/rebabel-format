@@ -63,7 +63,7 @@ class WhereClause:
                 qs = ', '.join(['?']*len(self.value))
                 return f'{self.variable} {neg}IN ({qs})', self.value
             else:
-                return f'{self.variable} IS{neg} ?', [self.value]
+                return f'{self.variable} IS {neg}?', [self.value]
         else:
             clauses = []
             escaped_values = []

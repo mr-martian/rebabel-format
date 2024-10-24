@@ -4,10 +4,289 @@ from rebabel_format.db import RBBLFile, WhereClause
 from rebabel_format import utils
 
 from collections import defaultdict
-import re
+from dataclasses import dataclass, field
+from typing import Any, Optional, Sequence
+
+@dataclass
+class Unit:
+    query: 'Query'
+    type: str
+    index: int
+    name: Any
+    parent: Optional['Unit'] = None
+    children: Sequence['Unit'] = field(default_factory=list)
+
+    def __getitem__(self, key):
+        return Condition(self.index, key, 'feature')
+
+    def has(self, key):
+        self.query.existence_conditionals.append((self.index, key, True))
+
+    def hasnot(self, key):
+        self.query.existence_conditionals.append((self.index, key, False))
+
+@dataclass
+class Condition:
+    left: Any
+    right: Any
+    operator: str
+
+    def is_compare_ref_feature(self):
+        return (self.operator in ['=', '!='] and
+                isinstance(self.left, Condition) and
+                self.left.operator == 'feature' and
+                isinstance(self.right, Unit))
+
+    def toSQL(self, feature_index: dict):
+        if self.operator == 'feature':
+            idx, _, is_str = feature_index[(self.left, self.right)]
+            return f'F{idx}.value', [], is_str
+        elif self.is_compare_ref_feature():
+            ql, al, sl = self.left.toSQL(feature_index)
+            return f'{ql} = U{self.right.index}', ids, False
+        def _toSQL(obj):
+            nonlocal self, feature_index
+            if isinstance(obj, Condition):
+                return obj.toSQL(feature_index)
+            else:
+                return '?', [obj], isinstance(obj, str)
+        ql, al, sl = _toSQL(self.left)
+        if self.right is None:
+            return f'{self.operator}({ql})', al, False
+        qr, ar, sr = _toSQL(self.right)
+        op = self.operator
+        if self.operator == '+' and (sl or sr):
+            op = '||'
+        elif self.operator in ['startswith', 'contains', 'endswith']:
+            # TODO: maybe use create_function to define these better
+            op = 'LIKE'
+            if self.operator != 'endswith':
+                qr = "'%' || " + qr
+            if self.operator != 'startswith':
+                qr += " || '%'"
+        return f'({ql}) {op} ({qr})', al+ar, False
+
+    def features(self):
+        if self.operator == 'feature':
+            return {(self.left, self.right)}
+        ret = set()
+        if isinstance(self.left, Condition):
+            ret |= self.left.features()
+        elif isinstance(self.left, Unit):
+            ret |= {(self.left.index, None)}
+        if isinstance(self.right, Condition):
+            ret |= self.right.features()
+        elif isinstance(self.right, Unit):
+            ret |= {(self.right.index, None)}
+        return ret
+
+    def __add__(self, other):
+        return Condition(self, other, '+')
+    def __radd__(self, other):
+        return Condition(other, self, '+')
+
+    def __sub__(self, other):
+        return Condition(self, other, '-')
+    def __rsub__(self, other):
+        return Condition(other, self, '-')
+
+    def __mul__(self, other):
+        return Condition(self, other, '*')
+    def __rmul__(self, other):
+        return Condition(other, self, '*')
+
+    def __truediv__(self, other):
+        return Condition(self, other, '/')
+    def __rtruediv__(self, other):
+        return Condition(other, self, '/')
+
+    def __mod__(self, other):
+        return Condition(self, other, '%')
+    def __rmod__(self, other):
+        return Condition(other, self, '%')
+
+    def __and__(self, other):
+        return Condition(self, other, 'AND')
+    def __rand__(self, other):
+        return Condition(other, self, 'AND')
+
+    def __or__(self, other):
+        return Condition(self, other, 'OR')
+    def __ror__(self, other):
+        return Condition(other, self, 'OR')
+
+    def __neg__(self):
+        return Condition(self, None, '-')
+
+    def __pos__(self):
+        return Condition(self, None, '+')
+
+    def __invert__(self):
+        return Condition(self, None, 'NOT')
+
+    def __contains__(self, other):
+        return Condition(self, other, 'contains')
+    def contains(self, other):
+        return Condition(self, other, 'contains')
+
+    def startswith(self, other):
+        return Condition(self, other, 'startswith')
+
+    def endswith(self, other):
+        return Condition(self, other, 'endswith')
+
+    def __lt__(self, other):
+        return Condition(self, other, '<')
+    def __gt__(self, other):
+        return Condition(self, other, '>')
+    def __lte__(self, other):
+        return Condition(self, other, '<=')
+    def __gte__(self, other):
+        return Condition(self, other, '>=')
+    def __eq__(self, other):
+        return Condition(self, other, '=')
+    def __ne__(self, other):
+        return Condition(self, other, '!=')
+
+class Query:
+    def __init__(self, db, type_map=None, feat_map=None):
+        self.db = db
+        self.type_map = type_map or {}
+        self.feat_map = feat_map or {}
+
+        self.units = []
+        self.conditionals = {}
+        self.features = {} # (uidx, name) => (fidx, ids, is_str)
+        self.existence_condtionals = []
+
+    def unit(self, utype, name):
+        ret = Unit(self, utype, len(self.units), name)
+        self.units.append(ret)
+        self.add(ret['meta:active'] == True)
+        return ret
+
+    def add(self, condition):
+        if not isinstance(condition, Condition):
+            raise ValueError(f'Constraint must be a Condition, not {condition.__type__.__name__}.')
+        feats = condition.features()
+        feat_index = set()
+        for fkey in feats:
+            idx, oldname = fkey
+            if oldname is None:
+                continue
+            if fkey not in self.features:
+                n = len(self.features)
+                oldtype = self.units[idx].type
+                newtype = utils.map_type(self.type_map, oldtype)
+                newname = utils.map_feature(self.feat_map, oldtype, oldname)
+                ids = self.db.get_feature_multi_type(newtype, newname, error=False)
+                if not ids:
+                    remap = ''
+                    if oldtype != newtype or oldname != newname:
+                        remap = f" (mapping to database type '{newtype}' and feature '{newname}')"
+                    raise ValueError(f"No feature '{oldname}' for unit type '{oldtype}{remap}.'")
+                is_str = any(x[1] == 'str' for x in ids)
+                self.features[fkey] = (n, [x[0] for x in ids], is_str)
+            feat_index.add(fkey)
+        ckey = tuple(sorted(x[0] for x in feats))
+        if ckey not in self.conditionals:
+            self.conditionals[ckey] = (condition, feat_index)
+        else:
+            oldcond, oldfeats = self.conditionals[ckey]
+            self.conditionals[ckey] = (oldcond & condition, oldfeats | feat_index)
+
+    def search(self):
+        unit_ids = []
+        for i in range(len(self.units)):
+            cond, feats = self.conditionals[(i,)]
+            where, params, _ = cond.toSQL(self.features)
+            select = None
+            tables = []
+            for fkey in feats:
+                n, ids, _ = self.features[fkey]
+                params += ids
+                tables.append(f'features F{n}')
+                qs = ','.join(['?']*len(ids))
+                where += f' AND F{n}.feature IN ({qs})'
+                if not select:
+                    select = f'F{n}.unit U{i}'
+                else:
+                    where += f' AND U{i} = F{n}.unit'
+            query = f'SELECT {select} FROM {", ".join(tables)} WHERE {where}'
+            # TODO: self.existence_conditionals
+            print(f'{query=}, {params=}')
+            self.db.cur.execute(query, params)
+            unit_ids.append(set(x[0] for x in self.db.cur.fetchall()))
+            if not unit_ids[-1]:
+                return
+        print(unit_ids)
+
+        intersect = IntersectionTracker(dict(enumerate(unit_ids)))
+
+        def restrict_edge(parent, child, primary):
+            nonlocal self, intersect, unit_ids
+            self.db.execute_clauses(
+                'SELECT parent, child FROM relations',
+                WhereClause('parent', list(unit_ids[parent])),
+                WhereClause('child', list(unit_ids[child])),
+                WhereClause('active', True),
+                WhereClause('isprimary', True))
+            pairs = self.db.cur.fetchall()
+            if not pairs:
+                return False
+            intersect.restrict(parent, child, pairs)
+            return True
+
+        for u in self.units:
+            if u.parent is not None:
+                if not restrict_edge(u.parent.index, u.index, True):
+                    return
+            for c in u.children:
+                if not restrict_edge(u.index, c.index, False):
+                    return
+
+        for ckey in self.conditionals:
+            if len(ckey) < 2:
+                continue
+            cond, feats = self.conditionals[ckey]
+            where, params, _ = cond.toSQL(self.features)
+            select = [None] * len(ckey)
+            tables = []
+            for fkey in feats:
+                n, ids, _ = self.features[fkey]
+                params += ids
+                tables.append(f'features F{n}')
+                qs = ','.join(['?']*len(ids))
+                where += f' AND F{n}.feature IN ({qs})'
+                i = fkey[0]
+                if not select[i]:
+                    select[i] = f'F{n}.unit AS U{i}'
+                else:
+                    where += f' AND F{n}.unit = U{i}'
+            query = f'SELECT {", ".join(select)} FROM {", ".join(tables)} WHERE {where}'
+            print(f'{query=}, {params=}')
+            self.db.cur.execute(query, params)
+            sets = self.db.cur.fetchall()
+            if not sets:
+                return
+            for i in range(len(ckey)):
+                for j in range(i+1, len(ckey)):
+                    intersect.restrict(ckey[i], ckey[j], ((s[i], s[j]) for s in sets))
+
+        intersect.make_dict()
+
+        names = [u.name for u in self.units]
+        def combine(cur):
+            nonlocal names, intersect
+            dct = dict(zip(names, cur))
+            if len(cur) == len(names):
+                yield dct
+            else:
+                for i in sorted(intersect.possible(dct, len(cur))):
+                    yield from combine(cur + [i])
+        yield from combine([])
 
 class FeatureQuery:
-    like_escape = re.compile('([%_$])')
     def __init__(self, featid, value=None, operator=None):
         self.featid = featid
         self.value = value
