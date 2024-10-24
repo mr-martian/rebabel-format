@@ -271,18 +271,17 @@ class Query:
                 return
             for i in range(len(ckey)):
                 for j in range(i+1, len(ckey)):
-                    intersect.restrict(ckey[i], ckey[j], ((s[i], s[j]) for s in sets))
+                    intersect.restrict(ckey[i], ckey[j], [(s[i], s[j]) for s in sets])
 
         intersect.make_dict()
 
         names = [u.name for u in self.units]
         def combine(cur):
             nonlocal names, intersect
-            dct = dict(zip(names, cur))
             if len(cur) == len(names):
-                yield dct
+                yield dict(zip(names, cur))
             else:
-                for i in sorted(intersect.possible(dct, len(cur))):
+                for i in sorted(intersect.possible(dict(enumerate(cur)), len(cur))):
                     yield from combine(cur + [i])
         yield from combine([])
 
@@ -393,7 +392,20 @@ class IntersectionTracker:
             return self.units[B]
         return self.restrictions[A][uid][B].copy()
     def restrict(self, n1, n2, pairs):
-        self.pairs.append(((n1, n2), pairs))
+        for i, ((on1, on2), opairs) in enumerate(self.pairs):
+            if on1 == n1 and on2 == n2:
+                self.pairs[i] = ((n1, n2), list(set(opairs) & set(pairs)))
+                self.units[n1] = set(p[0] for p in self.pairs[i][1])
+                self.units[n2] = set(p[1] for p in self.pairs[i][1])
+                break
+            elif on1 == n2 and on2 == n1:
+                npairs = list(set(opairs) & set((p[1], p[0]) for p in pairs))
+                self.pairs[i] = ((n2, n1), npairs)
+                self.units[n1] = set(p[1] for p in self.pairs[i][1])
+                self.units[n2] = set(p[0] for p in self.pairs[i][1])
+                break
+        else:
+            self.pairs.append(((n1, n2), pairs))
         todo = [n1, n2]
         while todo:
             n = todo.pop()
