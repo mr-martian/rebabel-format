@@ -214,12 +214,10 @@ class Query:
                     where += f' AND U{i} = F{n}.unit'
             query = f'SELECT {select} FROM {", ".join(tables)} WHERE {where}'
             # TODO: self.existence_conditionals
-            print(f'{query=}, {params=}')
             self.db.cur.execute(query, params)
             unit_ids.append(set(x[0] for x in self.db.cur.fetchall()))
             if not unit_ids[-1]:
                 return
-        print(unit_ids)
 
         intersect = IntersectionTracker(dict(enumerate(unit_ids)))
 
@@ -264,7 +262,6 @@ class Query:
                 else:
                     where += f' AND F{n}.unit = U{i}'
             query = f'SELECT {", ".join(select)} FROM {", ".join(tables)} WHERE {where}'
-            print(f'{query=}, {params=}')
             self.db.cur.execute(query, params)
             sets = self.db.cur.fetchall()
             if not sets:
