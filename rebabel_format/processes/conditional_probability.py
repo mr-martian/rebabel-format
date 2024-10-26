@@ -28,8 +28,8 @@ class ConditionalProbability(Process):
                 continue
             target_count += 1
             names = [k for k in dct if k in self.features]
-            for i in range(self.max_combinations):
-                for keys in combinations(names, i+1):
+            for i in range(self.max_combinations+1):
+                for keys in combinations(names, i):
                     values = tuple([dct[k] for k in keys])
                     results[keys][values][dct[self.target_feature]] += 1
 

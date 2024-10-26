@@ -1,0 +1,9 @@
+lemma,pos
+the,DET
+man,NOUN
+snore,VERB
+.,PUNCT
+the,DET
+woman,NOUN
+sing,VERB
+.,PUNCT
