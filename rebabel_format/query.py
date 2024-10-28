@@ -19,12 +19,6 @@ class Unit:
     def __getitem__(self, key):
         return Condition(self.index, key, 'feature')
 
-    def has(self, key):
-        self.query.existence_conditionals.append((self.index, key, True))
-
-    def hasnot(self, key):
-        self.query.existence_conditionals.append((self.index, key, False))
-
 @dataclass
 class Condition:
     left: Any
@@ -39,8 +33,12 @@ class Condition:
 
     def toSQL(self, feature_index: dict):
         if self.operator == 'feature':
-            idx, _, is_str = feature_index[(self.left, self.right)]
+            idx, _, is_str = feature_index[(self.left, self.right, True)]
             return f'F{idx}.value', [], is_str
+        elif self.operator == 'exists':
+            idx, ids, is_str = feature_index[(self.left, self.right, False)]
+            qs = ', '.join(['?']*len(ids))
+            return f'EXISTS (SELECT NULL FROM features F{idx} WHERE F{idx}.unit = U{self.left} AND F{idx}.feature IN ({qs}))', ids, False
         elif self.is_compare_ref_feature():
             ql, al, sl = self.left.toSQL(feature_index)
             return f'{ql} = U{self.right.index}', ids, False
@@ -68,16 +66,18 @@ class Condition:
 
     def features(self):
         if self.operator == 'feature':
-            return {(self.left, self.right)}
+            return {(self.left, self.right, True)}
+        elif self.operator == 'exists':
+            return {(self.left, self.right, False)}
         ret = set()
         if isinstance(self.left, Condition):
             ret |= self.left.features()
         elif isinstance(self.left, Unit):
-            ret |= {(self.left.index, None)}
+            ret |= {(self.left.index, None, True)}
         if isinstance(self.right, Condition):
             ret |= self.right.features()
         elif isinstance(self.right, Unit):
-            ret |= {(self.right.index, None)}
+            ret |= {(self.right.index, None, True)}
         return ret
 
     def __add__(self, other):
@@ -148,6 +148,11 @@ class Condition:
     def __ne__(self, other):
         return Condition(self, other, '!=')
 
+    def exists(self):
+        if self.operator != 'feature':
+            raise ValueError('.exists() only makes sense for features.')
+        return Condition(self.left, self.right, 'exists')
+
 class Query:
     def __init__(self, db, type_map=None, feat_map=None):
         self.db = db
@@ -157,7 +162,6 @@ class Query:
         self.units = []
         self.conditionals = {}
         self.features = {} # (uidx, name) => (fidx, ids, is_str)
-        self.existence_condtionals = []
 
     def unit(self, utype, name):
         ret = Unit(self, utype, len(self.units), name)
@@ -171,7 +175,7 @@ class Query:
         feats = condition.features()
         feat_index = set()
         for fkey in feats:
-            idx, oldname = fkey
+            idx, oldname, _ = fkey
             if oldname is None:
                 continue
             if fkey not in self.features:
@@ -188,7 +192,7 @@ class Query:
                 is_str = any(x[1] == 'str' for x in ids)
                 self.features[fkey] = (n, [x[0] for x in ids], is_str)
             feat_index.add(fkey)
-        ckey = tuple(sorted(x[0] for x in feats))
+        ckey = tuple(sorted(x[0] for x in feats if x[2]))
         if ckey not in self.conditionals:
             self.conditionals[ckey] = (condition, feat_index)
         else:
@@ -208,12 +212,11 @@ class Query:
                 tables.append(f'features F{n}')
                 qs = ','.join(['?']*len(ids))
                 where += f' AND F{n}.feature IN ({qs})'
-                if not select:
+                if not select and fkey[2]:
                     select = f'F{n}.unit U{i}'
                 else:
                     where += f' AND U{i} = F{n}.unit'
             query = f'SELECT {select} FROM {", ".join(tables)} WHERE {where}'
-            # TODO: self.existence_conditionals
             self.db.cur.execute(query, params)
             unit_ids.append(set(x[0] for x in self.db.cur.fetchall()))
             if not unit_ids[-1]:
@@ -251,6 +254,8 @@ class Query:
             select = [None] * len(ckey)
             tables = []
             for fkey in feats:
+                if not fkey[2]:
+                    continue
                 n, ids, _ = self.features[fkey]
                 params += ids
                 tables.append(f'features F{n}')
