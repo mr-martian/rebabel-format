@@ -204,6 +204,7 @@ class Query:
         for i in range(len(self.units)):
             cond, feats = self.conditionals[(i,)]
             where, params, _ = cond.toSQL(self.features)
+            where = f'({where})'
             select = None
             tables = []
             for fkey in feats:
@@ -251,6 +252,7 @@ class Query:
                 continue
             cond, feats = self.conditionals[ckey]
             where, params, _ = cond.toSQL(self.features)
+            where = f'({where})'
             select = [None] * len(ckey)
             tables = []
             for fkey in feats:
