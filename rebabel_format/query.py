@@ -5,6 +5,7 @@ from rebabel_format import utils
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+import re
 from typing import Any, Optional, Sequence
 
 @dataclass
@@ -66,10 +67,10 @@ class Condition:
                 return obj.toSQL(feature_index)
             else:
                 return '?', [obj], isinstance(obj, str)
-        ql, al, sl = _toSQL(self.left)
-        if self.right is None:
-            return f'{self.operator}({ql})', al, False
         qr, ar, sr = _toSQL(self.right)
+        if self.left is None:
+            return f'{self.operator}({qr})', ar, False
+        ql, al, sl = _toSQL(self.left)
         op = self.operator
         if self.operator == '+' and (sl or sr):
             op = '||'
@@ -136,13 +137,13 @@ class Condition:
         return Condition(other, self, 'OR')
 
     def __neg__(self):
-        return Condition(self, None, '-')
+        return Condition(None, self, '-')
 
     def __pos__(self):
-        return Condition(self, None, '+')
+        return Condition(None, self, '+')
 
     def __invert__(self):
-        return Condition(self, None, 'NOT')
+        return Condition(None, self, 'NOT')
 
     def __contains__(self, other):
         return Condition(self, other, 'contains')
@@ -174,6 +175,7 @@ class Condition:
         return Condition(self.left, self.right, 'exists')
 
 class Query:
+    token_re = re.compile(r'[()\.]|"(?:[^"\\]|\\.)*"|[^\s()\."]+')
     def __init__(self, db, type_map=None, feat_map=None):
         self.db = db
         self.type_map = type_map or {}
@@ -337,6 +339,132 @@ class Query:
             if mn is not None and mn > 0 and sub.intersect is None:
                 return
         yield from self.get_results()
+
+    def add_line(self, line, linenumber=0):
+        prefix = ''
+        if linenumber != 0:
+            prefix = f'Error on line {linenumber}: '
+        tokens = []
+        for tok in Query.token_re.findall(line):
+            if tok.startswith('#'):
+                break
+            tokens.append(tok)
+        if not tokens:
+            return
+        if tokens[0].lower() == 'unit':
+            return
+        precedence = {
+            '.': 7, 'has': 7, 'exists': 7, 'feature': 7,
+            '*': 6, '/': 6, '%': 6,
+            '+': 5, '-': 5,
+            'contains': 4, 'startswith': 4, 'endswith': 4, 'parent': 4, 'child': 4,
+            '<': 3, '>': 3, '<=': 3, '>=': 3, '=': 3, '!=': 3,
+            'not': 2, 'NOT': 2,
+            'and': 1, 'AND': 1,
+            'or': 0, 'OR': 0,
+        }
+        op_rename = {
+            '.': 'feature', 'has': 'exists', 'not': 'NOT', 'and': 'AND', 'or': 'OR',
+        }
+        old_stacks = []
+        stack = []
+        print(tokens)
+        for tok in tokens:
+            ltok = tok.lower()
+            if tok == '(':
+                if stack and stack[-1].right is not None:
+                    raise ValueError(prefix+'Expected operator, not open parenthesis.')
+                old_stacks.append(stack)
+                stack = []
+            elif tok == ')':
+                if not stack:
+                    raise ValueError(prefix+'Empty parentheses.')
+                if not old_stacks:
+                    raise ValueError(prefix+'Close parenthesis without preceding open parenthesis.')
+                if stack[-1].right is None:
+                    raise ValueError(prefix+'Expected operand before closing parenthesis.')
+                val = stack[0]
+                stack = old_stacks.pop()
+                if stack:
+                    stack[-1].right = val
+                else:
+                    stack.append(val)
+            elif ltok == 'not':
+                if not stack:
+                    stack.append(Condition(None, None, 'NOT'))
+                elif isinstance(stack[-1], Condition) and stack[-1].right is None:
+                    stack.append(Condition(None, None, 'NOT'))
+                    stack[-2].right = stack[-1]
+                else:
+                    raise ValueError(prefix+'Unexpected NOT.')
+            elif ltok in precedence:
+                op = op_rename.get(ltok, ltok)
+                if len(stack) == 1 and not isinstance(stack[0], Condition):
+                    stack[0] = Condition(stack[0], None, op)
+                    continue
+                if not stack or stack[-1].right is None:
+                    raise ValueError(f'{prefix}Unexpected operator {tok}.')
+                for i in range(len(stack)):
+                    if precedence[stack[i].operator] > precedence[ltok]:
+                        stack[i] = Condition(stack[i], None, op)
+                        stack = stack[:i+1]
+                        if i > 0:
+                            stack[i-1].right = stack[i]
+                        break
+                else:
+                    stack.append(Condition(stack[-1].right, None, op))
+                    stack[-2].right = stack[-1]
+            else:
+                val = tok
+                if val.isdigit() or (val[0] in '+-' and val[1:].isdigit()):
+                    val = int(val)
+                elif ltok in ['true', 'false']:
+                    val = (ltok == 'true')
+                elif val.startswith('"'):
+                    val = tok[1:-1].replace('\\n', '\n')
+                elif stack and isinstance(stack[-1], Condition) and stack[-1].operator in ['feature', 'exists']:
+                    pass
+                else:
+                    for u in self.units:
+                        if u.name == val:
+                            val = u.index
+                            break
+                    else:
+                        raise ValueError(f'{prefix}Unit "{val}" is not defined.')
+                if stack:
+                    if stack[-1].right is not None:
+                        raise ValueError(f'{prefix}Expected operator, not {tok}.')
+                    stack[-1].right = val
+                else:
+                    stack.append(val)
+        if old_stacks:
+            raise ValueError(prefix+'Parenthesis opened but not closed.')
+        if stack[-1].right is None:
+            raise ValueError(prefix+'Missing right operand.')
+        print(stack[0])
+        self.add(stack[0])
+
+    @staticmethod
+    def parse_query(db, query, order=None, type_map=None, feat_map=None):
+        Q = Query(db, type_map, feat_map)
+        if isinstance(query, dict):
+            done = set(order or [])
+            seq = [k for k in order or [] if k in query]
+            seq += [k for k in sorted(query.keys()) if k not in done]
+            units = {}
+            for key in seq:
+                pattern = query[key]
+                if not isinstance(pattern, dict):
+                    continue
+                if 'type' not in pattern:
+                    raise ValueError(f'Missing unit type for {key}.')
+                units[key] = Q.unit(pattern['type'], key)
+                # TODO: features, relations, etc
+        elif isinstance(query, str):
+            for linenumber, line in enumerate(query.splitlines(), 1):
+                Q.add_line(line, linenumber=linenumber)
+        else:
+            raise ValueError(f'Query must be dictionary or string, not {query.__type__.__name__}.')
 
 class FeatureQuery:
     def __init__(self, featid, value=None, operator=None):
