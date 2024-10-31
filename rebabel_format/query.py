@@ -14,6 +14,7 @@ class Unit:
     type: str
     index: int
     name: Any
+    order: Optional[str] = None
 
     def __getitem__(self, key):
         return Condition(self.index, key, 'feature')
@@ -30,7 +31,7 @@ class Unit:
 
     def subquery(self, min=1, max=None):
         ret = Query(self.query.db, self.query.type_map, self.query.feat_map)
-        u = ret.unit(self.type, None)
+        u = ret.unit(self.type, self.name)
         self.query.subqueries.append((ret, self.index, min, max))
         return ret, u
 
@@ -77,9 +78,9 @@ class Condition:
         elif self.operator in ['startswith', 'contains', 'endswith']:
             # TODO: maybe use create_function to define these better
             op = 'LIKE'
-            if self.operator != 'endswith':
-                qr = "'%' || " + qr
             if self.operator != 'startswith':
+                qr = "'%' || " + qr
+            if self.operator != 'endsswith':
                 qr += " || '%'"
         return f'({ql}) {op} ({qr})', al+ar, False
 
@@ -182,9 +183,11 @@ class Query:
         self.feat_map = feat_map or {}
 
         self.units = []
+        self.name2unit = {}
         self.conditionals = {}
         self.features = {} # (uidx, name) => (fidx, ids, is_str)
         self.subqueries = [] # [(query, uidx, min, max), ...]
+        self.order = defaultdict(dict)
 
         self.intersect = None
 
@@ -192,7 +195,27 @@ class Query:
         ret = Unit(self, utype, len(self.units), name)
         self.units.append(ret)
         self.add(ret['meta:active'] == True)
+        self.name2unit[name] = ret
         return ret
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.units[key]
+        else:
+            return self.name2unit[key]
+
+    def get_feature(self, idx, oldname):
+        oldtype = self.units[idx].type
+        newtype = utils.map_type(self.type_map, oldtype)
+        newname = utils.map_feature(self.feat_map, oldtype, oldname)
+        ids = self.db.get_feature_multi_type(newtype, newname, error=False)
+        if not ids:
+            remap = ''
+            if oldtype != newtype or oldname != newname:
+                remap = f" (mapping to database type '{newtype}' and feature '{newname}')"
+            raise ValueError(f"No feature '{oldname}' for unit type '{oldtype}{remap}.'")
+        is_str = any(x[1] == 'str' for x in ids)
+        return [x[0] for x in ids], set(x[1] for x in ids)
 
     def add(self, condition):
         if not isinstance(condition, Condition):
@@ -205,17 +228,8 @@ class Query:
                 continue
             if fkey not in self.features:
                 n = len(self.features)
-                oldtype = self.units[idx].type
-                newtype = utils.map_type(self.type_map, oldtype)
-                newname = utils.map_feature(self.feat_map, oldtype, oldname)
-                ids = self.db.get_feature_multi_type(newtype, newname, error=False)
-                if not ids:
-                    remap = ''
-                    if oldtype != newtype or oldname != newname:
-                        remap = f" (mapping to database type '{newtype}' and feature '{newname}')"
-                    raise ValueError(f"No feature '{oldname}' for unit type '{oldtype}{remap}.'")
-                is_str = any(x[1] == 'str' for x in ids)
-                self.features[fkey] = (n, [x[0] for x in ids], is_str)
+                ids, types = self.get_feature(idx, oldname)
+                self.features[fkey] = (n, ids, 'str' in types)
             feat_index.add(fkey)
         ckey = tuple(sorted(x[0] for x in feats))
         if ckey not in self.conditionals:
@@ -294,13 +308,27 @@ class Query:
                     self.intersect.restrict(ids[i], ids[j],
                                             [(s[i], s[j]) for s in sets])
 
+        for i, u in enumerate(self.units):
+            if u.order:
+                ids, types = self.get_feature(i, u.order)
+                if len(types) > 1:
+                    raise ValueError(f"Cannot sort unit '{u.name}' by feature '{u.order}' because it has multiple types after mapping.")
+                t = list(types)[0]
+                self.db.execute_clauses(
+                    'SELECT unit, value FROM features',
+                    WhereClause('feature', ids),
+                    WhereClause('unit', list(self.intersect.units[i])))
+                self.order[i] = {u: (0, self.db.interpret_value(v, t))
+                                 for u, v in self.db.cur.fetchall()}
+
         self.intersect.make_dict()
 
     def combine(self, cur, names):
         if len(cur) == len(self.units):
             yield dict(zip(names, cur))
         else:
-            for i in sorted(self.intersect.possible(dict(enumerate(cur)), len(cur))):
+            for i in sorted(self.intersect.possible(dict(enumerate(cur)), len(cur)),
+                            key=lambda u: self.order[len(cur)].get(u, (1, u))):
                 yield from self.combine(cur + [i], names)
 
     def get_results(self, parent=None):
@@ -368,7 +396,6 @@ class Query:
         }
         old_stacks = []
         stack = []
-        print(tokens)
         for tok in tokens:
             ltok = tok.lower()
             if tok == '(':
@@ -441,30 +468,107 @@ class Query:
             raise ValueError(prefix+'Parenthesis opened but not closed.')
         if stack[-1].right is None:
             raise ValueError(prefix+'Missing right operand.')
-        print(stack[0])
         self.add(stack[0])
+
+    def parse_query_dict(self, query, order=None):
+        if not order and isinstance(query.get('order'), list):
+            order = query['order']
+        done = set(order or [])
+        seq = [k for k in order or [] if k in query]
+        seq += [k for k in sorted(query.keys()) if k not in done]
+        units = {}
+        for key in seq:
+            pattern = query[key]
+            if not isinstance(pattern, dict):
+                continue
+            if 'type' not in pattern:
+                raise ValueError(f'Missing unit type for {key}.')
+            self.unit(pattern['type'], key)
+        for key in seq:
+            self.parse_unit_dict(query[key], self.name2unit[key])
+
+    def parse_unit_dict(self, pattern, unit):
+        op_lookup = {'lt': '<', 'lte': '<=', 'gt': '>', 'gte': '>=', '=': '=',
+                     'startswith': 'startswith', 'endswith': 'endswith',
+                     'contains': 'contains'}
+        for spec in pattern.get('features', []):
+            if isinstance(spec, str):
+                spec = spec.strip()
+                if unit.name and not spec.startswith(unit.name + '.'):
+                    spec = unit.name + '.' + spec
+                self.add_line(spec)
+            else:
+                if 'feature' not in spec:
+                    raise ValueError(f'Invalid feature specifier {spec}.')
+                feat = spec['feature']
+                ops = [k for k in spec if k.startswith('value')]
+                if not ops:
+                    self.add(unit[feat].exists())
+                for key in ops:
+                    val = spec[key]
+                    neg = False
+                    if '_' in key:
+                        op = key.split('_')[1]
+                    else:
+                        neg = ('not' in key)
+                        op = '='
+                    if op.startswith('not'):
+                        op = op[3:]
+                        neg = True
+                    if op == 'exist':
+                        cond = unit[feat].exists()
+                        neg = neg and not val
+                    elif op not in op_lookup:
+                        raise ValueError(f'Unknown constraint {key}.')
+                    elif isinstance(val, list):
+                        if not val:
+                            continue
+                        cond = Condition(unit[feat], val[0], op_lookup[op])
+                        for v in val[1:]:
+                            cond = Condition(cond,
+                                             Condition(unit[feat], v, op_lookup[op]),
+                                             'OR')
+                    else:
+                        cond = Condition(unit[feat], val, op_lookup[op])
+                    if neg:
+                        cond = ~cond
+                    self.add(cond)
+        if 'order' in pattern:
+            unit.order = pattern['order']
+        parent = pattern.get('parent')
+        if parent:
+            if parent not in self.name2unit:
+                raise ValueError(f'No node named {parent} (refereced by {unit.name}).')
+            self.add(unit.parent(self.name2unit[parent]))
+        next = pattern.get('next')
+        if next:
+            if next not in self.name2unit:
+                raise ValueError(f'No node named {next} (refereced by {unit.name}).')
+            if not parent:
+                raise ValueError(f'Adjacency constraint requires a named parent for {unit.name}.')
+            nu = self.name2unit[next]
+            self.add(nu.parent(parent) & (unit['meta:index'] + 1 == nu['meta:index']))
+        for sq in pattern.get('subqueries', []):
+            mn = sq.get('min', 1)
+            if not isinstance(mn, int):
+                mn = 1
+            mx = sq.get('max')
+            if mx is not None and not isinstance(mx, int):
+                mx = None
+            Q, _ = unit.subquery(min=mn, max=mx)
+            Q.parse_query_dict(sq)
 
     @staticmethod
     def parse_query(db, query, order=None, type_map=None, feat_map=None):
         Q = Query(db, type_map, feat_map)
         if isinstance(query, dict):
-            done = set(order or [])
-            seq = [k for k in order or [] if k in query]
-            seq += [k for k in sorted(query.keys()) if k not in done]
-            units = {}
-            for key in seq:
-                pattern = query[key]
-                if not isinstance(pattern, dict):
-                    continue
-                if 'type' not in pattern:
-                    raise ValueError(f'Missing unit type for {key}.')
-                units[key] = Q.unit(pattern['type'], key)
-                # TODO: features, relations, etc
+            Q.parse_query_dict(query, order)
         elif isinstance(query, str):
             for linenumber, line in enumerate(query.splitlines(), 1):
                 Q.add_line(line, linenumber=linenumber)
         else:
             raise ValueError(f'Query must be dictionary or string, not {query.__type__.__name__}.')
+        return Q
 
 class FeatureQuery:
     def __init__(self, featid, value=None, operator=None):
@@ -504,60 +608,6 @@ class FeatureQuery:
             return [u for u in units if u not in drop]
         else:
             return [x[0] for x in db.cur.fetchall() if self.check(x[1])]
-
-class UnitQuery:
-    def __init__(self, db, unittype):
-        self.db = db
-        self.unittype = unittype
-        self.features = []
-    def add_feature(self, spec):
-        if 'feature' not in spec:
-            raise ValueError(f'Invalid feature specifier {spec}.')
-        feats = self.db.get_feature_multi_type(self.unittype, spec['feature'],
-                                               error=True)
-        ftypes = sorted(set(f[1] for f in feats))
-        if len(ftypes) > 1:
-            raise ValueError(f"Feature '{spec['feature']}' has multiple types; found {ftypes}.")
-        ftyp = ftypes[0]
-        fid = [f[0] for f in feats]
-        if ftyp == 'ref':
-            raise NotImplementedError(f'Reference features are not yet supported ({spec}).')
-        v = [k for k in spec if k.startswith('value')]
-        if len(v) > 1:
-            raise ValueError(f'Cannot specify multiple value constrains on a single feature, found {v}.')
-        if v:
-            fq = FeatureQuery(fid, spec[v[0]], v[0])
-        else:
-            fq = FeatureQuery(fid)
-        self.features.append(fq)
-    def check(self, fq, ids):
-        if not ids:
-            return []
-        fq.run_query(self.db, ids)
-        ret = []
-        for i, v in self.db.cur.fetchall():
-            if fq.check(v):
-                ret.append(i)
-        return ret
-    def get_units(self):
-        units = None
-        for f in self.features:
-            if f.is_notexist():
-                continue
-            units = f.get_units(self.db, units)
-            if len(units) == 0:
-                return []
-        where = [WhereClause('type', self.unittype)]
-        if units:
-            where.append(WhereClause('id', units))
-        self.db.execute_clauses('SELECT id FROM units', *where)
-        units = [x[0] for x in self.db.cur.fetchall()]
-        for f in self.features:
-            if f.is_notexist():
-                units = f.get_units(self.db, units)
-            if not units:
-                break
-        return units
 
 class IntersectionTracker:
     def __init__(self, units):
@@ -639,147 +689,20 @@ class IntersectionTracker:
             ret = ret.intersection(self.lookup(k, name, dct[k]))
         return ret
 
-def make_sequence(units, order, multi_leaf):
-    base = [u for u in (order or sorted(units)) if u != multi_leaf]
-    ret = [u for u in base if u in units]
-    ret += [u for u in sorted(units) if u not in ret and u != multi_leaf]
-    if multi_leaf:
-        ret.append(multi_leaf)
-    return ret
-
 def search(db, query, order=None):
-    units = {}
-    order_by = {}
-    rels = [] # [(parent, child), ...]
-    seq_rels = [] # [(A, B, type, immediate), ...]
-    multi_leaf = None
-    for name, pattern in query.items():
-        if not isinstance(pattern, dict):
-            continue
-        if 'type' not in pattern:
-            raise ValueError(f'Missing unittype for {name}.')
-        uq = UnitQuery(db, pattern['type'])
-        for spec in pattern.get('features', []):
-            uq.add_feature(spec)
-        units[name] = uq.get_units()
-        if pattern.get('multiple', False):
-            if multi_leaf is not None:
-                raise ValueError(f'Cannot have both {multi_leaf} and {name} as multi-nodes.')
-            multi_leaf = name
-        elif not units[name]:
-            return
-        if 'order' in pattern:
-            feats = db.get_feature_multi_type(pattern['type'], pattern['order'],
-                                              error=False)
-            if not feats:
-                raise ValueError(f"Cannot find feature '{pattern['order']}' for ordering unit '{name}'.")
-            if len(set(f[1] for f in feats)) > 1:
-                raise ValueError(f"Cannot sort unit '{name}' by feature '{pattern['order']}' because it has multiple types.")
-            order_by[name] = db.get_feature_values(units[name],
-                                                   [f[0] for f in feats])
-        if 'parent' in pattern and pattern['parent'] is not None:
-            if pattern['parent'] not in query:
-                raise ValueError(f'No node named {pattern["parent"]} (referenced by {name}).')
-            rels.append((pattern['parent'], name))
-        if 'next' in pattern:
-            if pattern['next'] not in query:
-                raise ValueError(f'No node named {pattern["next"]} (referenced by {name}).')
-            if pattern['type'] != query[pattern['next']].get('type'):
-                raise ValueError(f'Adjacency constraints only make sense for units of the same type ({name} is {pattern["type"]} but {pattern["next"]} is {query[pattern["next"]].get("type")})')
-            seq_rels.append((name, pattern['next'], pattern['type'], True))
-    # TODO: I expect there's some more intelligent way to do this part of the
-    # querying if we pre-compute the right order to search for certain things
-    # and then work them into the unit queries. Unfortunately, by ensuring
-    # that the code below will return things in a consistent order, I've
-    # probably doomed us to forever maintain that order per Hyrum's Law.
-    # DGS 2023-11-21
-    intersect = IntersectionTracker({x: set(y) for x, y in units.items()})
-    for parent, child in rels:
-        if parent == multi_leaf:
-            raise ValueError(f'Node {parent} cannot have both children and multiple = true.')
-        db.execute_clauses('SELECT parent, child FROM relations',
-                           WhereClause('parent', units[parent]),
-                           WhereClause('child', units[child]),
-                           WhereClause('active', True))
-        pairs = set(db.cur.fetchall())
-        if not pairs:
-            return
-        intersect.restrict(parent, child, pairs)
-    for A, B, typ, immediate in seq_rels:
-        q1 = ', '.join(['?']*len(units[A]))
-        q2 = ', '.join(['?']*len(units[B]))
-        fid, ftyp = db.get_feature(typ, 'meta', 'index', error=True)
-        db.cur.execute(
-            f'SELECT A.unit, B.unit FROM features A, features B WHERE A.value + 1 = B.value AND A.feature = ? AND B.feature = ? AND A.unit IN ({q1}) AND B.unit IN ({q2})',
-            [fid, fid] + units[A] + units[B],
-        )
-        pairs = set(db.cur.fetchall())
-        if not pairs:
-            return
-        intersect.restrict(A, B, pairs)
-    intersect.make_dict()
-    seq = make_sequence(set(units.keys()), order, multi_leaf)
-    def sort_units(name, uids):
-        nonlocal order_by
-        if name not in order_by:
-            return sorted(uids)
-        else:
-            val = []
-            noval = []
-            for u in uids:
-                v = order_by[name].get(u)
-                if v is None:
-                    noval.append(u)
-                else:
-                    val.append((v, u))
-            return [u for v, u in sorted(val)] + sorted(noval)
-    def combine(cur):
-        nonlocal seq, units, intersect, multi_leaf
-        if len(cur) == len(seq):
-            yield dict(zip(seq, cur))
-        else:
-            name = seq[len(cur)]
-            u = sort_units(name,
-                           intersect.possible(dict(zip(seq, cur)), name))
-            if name == multi_leaf:
-                yield from combine(cur + [u])
-            else:
-                for i in u:
-                    yield from combine(cur + [i])
-    yield from combine([])
-
-def map_query(query, type_map, feat_map):
-    '''Mutate `query` based on mappings'''
-
-    def map_feat(oldfeat, oldtypes):
-        nonlocal feat_map
-        for typ in oldtypes + [None]:
-            if (oldfeat, typ) in feat_map:
-                return feat_map[(oldfeat, typ)][0]
-        return oldfeat
-
-    if not type_map and not feat_map:
-        return
-    for k, v in query.items():
-        if not isinstance(v, dict):
-            continue
-        oldtypes = utils.as_list(v['type'])
-        v['type'] = [type_map.get(t, t) for t in oldtypes]
-        if 'order' in v:
-            v['order'] = map_feat(v['order'], oldtypes)
-        if 'features' in v:
-            for dct in v['features']:
-                dct['feature'] = map_feat(dct['feature'], oldtypes)
+    Q = Query.parse_query(db, query, order)
+    yield from Q.search()
 
 class ResultTable:
+    # TODO: subquery support
     def __init__(self, db, query, order=None, type_map=None, feat_map=None):
         self.db = db
         self.type_map = type_map or {}
         self.rev_type_map = {v:k for k, v in self.type_map.items()}
         self.feat_map = feat_map or {}
         self.rev_feat_map = {v:k for k, v in self.feat_map.items()}
-        map_query(query, self.rev_type_map, self.rev_feat_map)
-        self.nodes = list(search(db, query, order=order))
+        Q = Query.parse_query(db, query, order, self.rev_type_map, self.rev_feat_map)
+        self.nodes = list(Q.search())
         self.features = []
         self.feature_names = {}
         for result in self.nodes:
@@ -788,8 +711,8 @@ class ResultTable:
                 for uid in utils.as_list(l):
                     dct[uid] = {}
             self.features.append(dct)
-        self.types = {k: v['type'] for k, v in query.items()
-                      if isinstance(v, dict)}
+        self.types = {u.name: utils.map_type(self.rev_type_map, u.type)
+                      for u in Q.units}
         self.unit2results = defaultdict(list)
         for i, result in enumerate(self.nodes):
             for uid in result.values():
