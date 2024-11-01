@@ -131,7 +131,7 @@ class EAFReader(XMLReader):
                         self.set_feature(i, 'ELAN:'+tier_name, 'str', t)
 
 class EAFWriter(Writer):
-    identifier = 'elan'
+    identifier = 'eaf'
 
     query = True
 
