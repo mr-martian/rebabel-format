@@ -329,6 +329,17 @@ class RBBLFile:
         self.cur.execute('SELECT * FROM tiers')
         return self.cur.fetchall()
 
+    def get_all_feature_names_by_unit(self):
+        '''Return a dictionary mapping unit types to lists of
+        feature names (unsorted).
+        '''
+
+        self.cur.execute('SELECT unittype, name FROM tiers')
+        ret = defaultdict(list)
+        for typ, name in self.cur.fetchall():
+            ret[typ].append(name)
+        return ret
+
     def get_units(self, unittype: str, parent=None):
         if parent is None:
             self.cur.execute(
