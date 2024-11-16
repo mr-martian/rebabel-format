@@ -23,6 +23,9 @@ class FlextextReader(XMLReader):
     Any <item> nodes will be imported as string features. The tier will be
     `FlexText:[lang]`, the feature will be `[type]`, and the value will be
     the text content of the XML node.
+
+    Thus `<item type="txt" lang="en">potato</item>` will become a feature
+    named `FlexText:en:txt` with value `potato`.
     '''
     identifier = 'flextext'
     short_name = 'FlexText'
