@@ -22,3 +22,11 @@ class Export(Process):
                                         query_updates=self.query_updates)
         with open(self.outfile, 'w', encoding='UTF-8') as fout:
             writer.write(fout)
+
+    @classmethod
+    def help_text_epilog(cls):
+        from rebabel_format.writer import ALL_WRITERS
+        writers = '\n- '.join(sorted(ALL_WRITERS.keys()))
+        return f'''The following writers are available:
+- {writers}
+'''

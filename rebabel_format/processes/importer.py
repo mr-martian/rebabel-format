@@ -38,7 +38,7 @@ class Importer(Process):
 
     @classmethod
     def help_text_epilog(cls):
-        from rebabel_format.reader import ALL_READERS, ReaderError
+        from rebabel_format.reader import ALL_READERS
         readers = '\n- '.join(sorted(ALL_READERS.keys()))
         return f'''The following readers are available:
 - {readers}

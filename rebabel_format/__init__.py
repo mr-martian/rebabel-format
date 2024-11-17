@@ -142,6 +142,10 @@ run `rebabel-format help [ACTION]` for a longer description.'''
 
     if args.action == 'help':
         if args.config in ALL_PROCESSES:
+            if args.config == 'import':
+                load_readers(True)
+            elif args.config == 'export':
+                load_writers(True)
             print(ALL_PROCESSES[args.config].help_text())
         elif args.config.startswith('import.'):
             load_readers(True)
