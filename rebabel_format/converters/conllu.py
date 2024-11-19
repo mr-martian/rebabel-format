@@ -10,7 +10,8 @@ class ConnluReader(LineReader):
     - sentence
 
     Each sentence is imported as a top-level unit. Any comment lines which
-    contain `=` will be imported as string features in the `UD` tier.
+    contain `=` will be imported as string features in the `UD` tier
+    (for example `UD:sent_id`).
 
     - word, token
 

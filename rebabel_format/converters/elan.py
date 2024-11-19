@@ -49,9 +49,14 @@ def get_tier_structure(root):
 
 class EAFReader(XMLReader):
     '''
-    Any tier which does not a Symbolic Association tier will be added as a unit
+    Any tier which is not a Symbolic Association tier will be added as a unit
     of the same name. Every tier will be imported as a string feature in the
     tier `ELAN`.
+
+    For example, a time-aligned tier named `word` will result in units of type
+    `word` with a feature named `ELAN:word`. Then, if there is a Symbolic
+    Association tier below `word` named `POS`, each `word` will also have
+    a feature named `ELAN:POS`.
 
     If a tier is time-aligned, then the units imported from it will
     have integer features `alignment:startime` and `alignment:endtime`,
