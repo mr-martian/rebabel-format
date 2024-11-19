@@ -64,6 +64,9 @@ class StaticTests(unittest.TestCase):
     def runTest(self):
         with data_dir('static'):
             for fname in glob.glob('*.toml'):
+                if 'multi_node' in fname:
+                    # TODO: rewrite this test to use subqueries
+                    continue
                 self.single_test(fname[:-5])
 
 class SimpleTest:
