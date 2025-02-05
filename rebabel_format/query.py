@@ -47,25 +47,25 @@ class Condition:
                 self.left.operator == 'feature' and
                 isinstance(self.right, Unit))
 
-    def toSQL(self, feature_index: dict):
+    def toSQL(self, query):
         if self.operator == 'feature':
-            idx, _, is_str = feature_index[(self.left, self.right, True)]
+            idx, _, _, is_str = query.get_feature(self.left, self.right, False)
             return f'F{idx}.value', [], is_str
         elif self.operator == 'exists':
-            idx, ids, is_str = feature_index[(self.left, self.right, False)]
+            idx, ids, _, is_str = query.get_feature(self.left, self.right, True)
             qs = ', '.join(['?']*len(ids))
             return f'EXISTS (SELECT NULL FROM features F{idx} WHERE F{idx}.unit = U{self.left} AND F{idx}.feature IN ({qs}))', ids, False
         elif self.is_compare_ref_feature():
             ql, al, sl = self.left.toSQL(feature_index)
-            return f'{ql} = U{self.right.index}', ids, False
+            return f'{ql} = U{self.right.index}', al, False
         elif self.operator == 'parent':
             return f'EXISTS (SELECT NULL FROM relations WHERE parent = U{self.right} AND child = U{self.left} AND isprimary = ? AND active = ?)', [True, True], False
         elif self.operator == 'child':
             return f'EXISTS (SELECT NULL FROM relations WHERE child = U{self.right} AND parent = U{self.left} AND isprimary = ? AND active = ?)', [False, True], False
         def _toSQL(obj):
-            nonlocal self, feature_index
+            nonlocal self, query
             if isinstance(obj, Condition):
-                return obj.toSQL(feature_index)
+                return obj.toSQL(query)
             else:
                 return '?', [obj], isinstance(obj, str)
         qr, ar, sr = _toSQL(self.right)
@@ -84,23 +84,37 @@ class Condition:
                 qr += " || '%'"
         return f'({ql}) {op} ({qr})', al+ar, False
 
-    def features(self):
-        if self.operator == 'feature':
-            return {(self.left, self.right, True)}
-        elif self.operator == 'exists':
-            return {(self.left, self.right, False)}
-        elif self.operator in ['parent', 'child']:
-            return {(self.left, None, False), (self.right, None, False)}
-        ret = set()
-        if isinstance(self.left, Condition):
-            ret |= self.left.features()
-        elif isinstance(self.left, Unit):
-            ret |= {(self.left.index, None, True)}
-        if isinstance(self.right, Condition):
-            ret |= self.right.features()
-        elif isinstance(self.right, Unit):
-            ret |= {(self.right.index, None, True)}
-        return ret
+    def add_to_query(self, query):
+        if self.operator in ['parent', 'child']:
+            table = f'R{query.relation_count}'
+            query.relation_count += 1
+            query.select_tables.append(f'relations {table}')
+            query.where_conds += [
+                f'{table}.isprimary = ?',
+                f'{table}.active = ?',
+            ]
+            query.params += [(self.operator == 'parent'), True]
+            if self.operator == 'parent':
+                query.where_conds += [
+                    f'{table}.parent = U{self.right}',
+                    f'{table}.child = U{self.left}',
+                ]
+            else:
+                query.where_conds += [
+                    f'{table}.parent = U{self.left}',
+                    f'{table}.child = U{self.right}',
+                ]
+        else:
+            s, p, _ = self.toSQL(query)
+            query.where_conds.append(s)
+            query.params += p
+
+    def flatten(self):
+        if self.operator == 'AND':
+            yield from self.left.flatten()
+            yield from self.right.flatten()
+        else:
+            yield self
 
     def __add__(self, other):
         return Condition(self, other, '+')
@@ -184,18 +198,34 @@ class Query:
 
         self.units = []
         self.name2unit = {}
-        self.conditionals = {}
+        self.conditional = None
         self.features = {} # (uidx, name) => (fidx, ids, is_str)
         self.subqueries = [] # [(query, uidx, min, max), ...]
         self.order = defaultdict(dict)
 
-        self.intersect = None
+        self.select_cols = []
+        self.select_tables = []
+        self.where_conds = []
+        self.params = []
+        self.relation_count = 0
+
+        self.results = []
+        self.unit_ids = []
+
+    def add_clause(self, clause):
+        txt, params = clause.toSQL()
+        self.where_conds.append(txt)
+        self.params += params
 
     def unit(self, utype, name):
         ret = Unit(self, utype, len(self.units), name)
         self.units.append(ret)
         self.add(ret['meta:active'] == True)
         self.name2unit[name] = ret
+        self.select_cols.append(f'TU{ret.index}.id AS U{ret.index}')
+        self.select_tables.append(f'units TU{ret.index}')
+        self.add_clause(WhereClause(f'TU{ret.index}.type',
+                                    utils.map_type(self.type_map, utype)))
         return ret
 
     def __getitem__(self, key):
@@ -204,7 +234,7 @@ class Query:
         else:
             return self.name2unit[key]
 
-    def get_feature(self, idx, oldname):
+    def add_feature(self, idx, oldname, for_exist):
         oldtype = self.units[idx].type
         newtype = utils.map_type(self.type_map, oldtype)
         newname = utils.map_feature(self.feat_map, oldtype, oldname)
@@ -215,156 +245,89 @@ class Query:
                 remap = f" (mapping to database type '{newtype}' and feature '{newname}')"
             raise ValueError(f"No feature '{oldname}' for unit type '{oldtype}{remap}.'")
         is_str = any(x[1] == 'str' for x in ids)
-        return [x[0] for x in ids], set(x[1] for x in ids)
+        n = len(self.features)
+        if not for_exist:
+            self.select_tables.append(f'features F{n}')
+            self.where_conds.append(f'F{n}.unit = U{idx}')
+            qs = ','.join(['?']*len(ids))
+            self.where_conds.append(f'F{n}.feature IN ({qs})')
+            self.params += [x[0] for x in ids]
+        return len(self.features), [x[0] for x in ids], set(x[1] for x in ids), is_str
+
+    def get_feature(self, idx, name, for_exist):
+        if (idx, name, for_exist) not in self.features:
+            self.features[(idx, name, for_exist)] = self.add_feature(idx, name, for_exist)
+        return self.features[(idx, name, for_exist)]
 
     def add(self, condition):
         if not isinstance(condition, Condition):
             raise ValueError(f'Constraint must be a Condition, not {condition.__type__.__name__}.')
-        feats = condition.features()
-        feat_index = set()
-        for fkey in feats:
-            idx, oldname, _ = fkey
-            if oldname is None:
-                continue
-            if fkey not in self.features:
-                n = len(self.features)
-                ids, types = self.get_feature(idx, oldname)
-                self.features[fkey] = (n, ids, 'str' in types)
-            feat_index.add(fkey)
-        ckey = tuple(sorted(x[0] for x in feats))
-        if ckey not in self.conditionals:
-            self.conditionals[ckey] = (condition, feat_index)
+        if self.conditional is None:
+            self.conditional = condition
         else:
-            oldcond, oldfeats = self.conditionals[ckey]
-            self.conditionals[ckey] = (oldcond & condition, oldfeats | feat_index)
+            self.conditional = self.conditional & condition
 
     def prepare_search(self, parent_ids=None):
-        unit_ids = []
-        for i in range(len(self.units)):
-            cond, feats = self.conditionals[(i,)]
-            where, params, _ = cond.toSQL(self.features)
-            where = f'({where})'
-            select = None
-            tables = []
-            for fkey in feats:
-                n, ids, _ = self.features[fkey]
-                params += ids
-                tables.append(f'features F{n}')
-                qs = ','.join(['?']*len(ids))
-                where += f' AND F{n}.feature IN ({qs})'
-                if not select and fkey[2]:
-                    select = f'F{n}.unit U{i}'
-                else:
-                    where += f' AND U{i} = F{n}.unit'
-            query = f'SELECT {select} FROM {", ".join(tables)} WHERE {where}'
-            self.db.cur.execute(query, params)
-            unit_ids.append(set(x[0] for x in self.db.cur.fetchall()))
-            if i == 0 and parent_ids is not None:
-                unit_ids[0] = unit_ids[0] & set(parent_ids)
-            if not unit_ids[-1]:
-                return
+        if self.results:
+            return
+        if parent_ids:
+            self.add_clause(WhereClause('U0', parent_ids))
+        if self.conditional is not None:
+            for c in self.conditional.flatten():
+                c.add_to_query(self)
+        query = f'SELECT {", ".join(self.select_cols)} FROM {", ".join(self.select_tables)} WHERE {" AND ".join(self.where_conds)}'
+        self.db.cur.execute(query, self.params)
+        self.results = list(set(self.db.cur.fetchall()))
 
-        self.intersect = IntersectionTracker(dict(enumerate(unit_ids)))
-
-        for ckey in self.conditionals:
-            if len(ckey) < 2:
-                continue
-            cond, feats = self.conditionals[ckey]
-            where, params, _ = cond.toSQL(self.features)
-            where = f'({where})'
-            select = {k: None for k in set(ckey)}
-            tables = []
-            for fkey in feats:
-                if not fkey[2]:
-                    continue
-                n, ids, _ = self.features[fkey]
-                params += ids
-                tables.append(f'features F{n}')
-                qs = ','.join(['?']*len(ids))
-                where += f' AND F{n}.feature IN ({qs})'
-                i = fkey[0]
-                if fkey[2] and not select[i]:
-                    select[i] = f'F{n}.unit AS U{i}'
-                else:
-                    where += f' AND F{n}.unit = U{i}'
-            sl = []
-            for k in sorted(select):
-                if select[k]:
-                    sl.append(select[k])
-                else:
-                    sl.append(f'TU{k}.id AS U{k}')
-                    tables.append(f'units TU{k}')
-                    qs = ', '.join(['?']*len(unit_ids[k]))
-                    where += f' AND U{k} IN ({qs})'
-                    params += unit_ids[k]
-            query = f'SELECT {", ".join(sl)} FROM {", ".join(tables)} WHERE {where}'
-            self.db.cur.execute(query, params)
-            sets = self.db.cur.fetchall()
-            if not sets:
-                return
-            ids = sorted(select)
-            for i in range(len(ids)):
-                for j in range(i+1, len(ids)):
-                    self.intersect.restrict(ids[i], ids[j],
-                                            [(s[i], s[j]) for s in sets])
+        self.unit_ids = [set() for i in range(len(self.units))]
+        for r in self.results:
+            for i in range(len(self.units)):
+                self.unit_ids[i].add(r[i])
 
         for i, u in enumerate(self.units):
             if u.order:
-                ids, types = self.get_feature(i, u.order)
+                _, ids, types, _ = self.get_feature(i, u.order, False)
                 if len(types) > 1:
                     raise ValueError(f"Cannot sort unit '{u.name}' by feature '{u.order}' because it has multiple types after mapping.")
                 t = list(types)[0]
                 self.db.execute_clauses(
                     'SELECT unit, value FROM features',
                     WhereClause('feature', ids),
-                    WhereClause('unit', list(self.intersect.units[i])))
+                    WhereClause('unit', list(self.unit_ids[i])))
                 self.order[i] = {u: (0, self.db.interpret_value(v, t))
                                  for u, v in self.db.cur.fetchall()}
 
-        self.intersect.make_dict()
-
-    def combine(self, cur, names):
-        if len(cur) == len(self.units):
-            yield dict(zip(names, cur))
-        else:
-            for i in sorted(self.intersect.possible(dict(enumerate(cur)), len(cur)),
-                            key=lambda u: self.order[len(cur)].get(u, (1, u))):
-                yield from self.combine(cur + [i], names)
+        self.results.sort(
+            key=lambda tup: tuple([self.order[i].get(u, (1, u))
+                                   for i, u in enumerate(tup)]))
 
     def get_results(self, parent=None):
-        if self.intersect is None:
-            return
         names = [u.name for u in self.units]
-        initial = [parent] if parent is not None else []
-        if not self.subqueries:
-            yield from self.combine(initial, names)
-        else:
-            indexes = list(range(len(self.units)))
-            for result in self.combine(initial, indexes):
-                ret = {names[i]: result[i] for i in indexes}
-                count = Counter()
-                ok = True
-                for sub, idx, mn, mx in self.subqueries:
-                    n = count[idx]
-                    count[idx] += 1
-                    results = list(sub.get_results(result[idx]))
-                    if mn is not None and len(results) < mn:
-                        ok = False
-                        break
-                    if mx is not None and len(results) > mx:
-                        ok = False
-                        break
-                    ret[(names[idx], n)] = results
-                if ok:
-                    yield ret
+        for result in self.results:
+            if parent is not None and result[0] != parent:
+                continue
+            dct = dict(zip(names, result))
+            count = Counter()
+            ok = True
+            for sub, idx, mn, mx in self.subqueries:
+                n = count[idx]
+                count[idx] += 1
+                results = list(sub.get_results(result[idx]))
+                if mn is not None and len(results) < mn:
+                    ok = False
+                    break
+                if mx is not None and len(results) > mx:
+                    ok = False
+                    break
+                dct[(names[idx], n)] = results
+            if ok:
+                yield dct
 
     def search(self):
         self.prepare_search()
-        if self.intersect is None:
-            return
         for sub, idx, mn, mx in self.subqueries:
-            sub.prepare_search(self.intersect.units[idx])
-            if mn is not None and mn > 0 and sub.intersect is None:
+            sub.prepare_search(self.unit_ids[idx])
+            if mn is not None and mn > 0 and not sub.results:
                 return
         yield from self.get_results()
 
@@ -560,6 +523,8 @@ class Query:
 
     @staticmethod
     def parse_query(db, query, order=None, type_map=None, feat_map=None):
+        if isinstance(query, Query):
+            return query
         Q = Query(db, type_map, feat_map)
         if isinstance(query, dict):
             Q.parse_query_dict(query, order)
@@ -608,86 +573,6 @@ class FeatureQuery:
             return [u for u in units if u not in drop]
         else:
             return [x[0] for x in db.cur.fetchall() if self.check(x[1])]
-
-class IntersectionTracker:
-    def __init__(self, units):
-        self.units = units
-        self.pairs = []
-        self.restrictions = {} # A.name => A.id => B.name => B.id
-    def lookup(self, A, B, uid):
-        if A not in self.restrictions:
-            return self.units[B]
-        if uid not in self.restrictions[A]:
-            return set()
-        if B not in self.restrictions[A][uid]:
-            return self.units[B]
-        return self.restrictions[A][uid][B].copy()
-    def restrict(self, n1, n2, pairs):
-        for i, ((on1, on2), opairs) in enumerate(self.pairs):
-            if on1 == n1 and on2 == n2:
-                self.pairs[i] = ((n1, n2), list(set(opairs) & set(pairs)))
-                self.units[n1] = set(p[0] for p in self.pairs[i][1])
-                self.units[n2] = set(p[1] for p in self.pairs[i][1])
-                break
-            elif on1 == n2 and on2 == n1:
-                npairs = list(set(opairs) & set((p[1], p[0]) for p in pairs))
-                self.pairs[i] = ((n2, n1), npairs)
-                self.units[n1] = set(p[1] for p in self.pairs[i][1])
-                self.units[n2] = set(p[0] for p in self.pairs[i][1])
-                break
-        else:
-            self.pairs.append(((n1, n2), pairs))
-        todo = [n1, n2]
-        while todo:
-            n = todo.pop()
-            s = self.units[n].copy()
-            for (n1, n2), pls in self.pairs:
-                if n1 == n or n2 == n:
-                    if not pls:
-                        s.clear()
-                        break
-                    s1, s2 = map(set, zip(*pls))
-                    if n1 == n:
-                        s = s.intersection(s1)
-                    elif n2 == n:
-                        s = s.intersection(s2)
-            if len(s) == len(self.units[n]):
-                continue
-            else:
-                self.units[n] = s
-            for i, ((n1, n2), pls) in enumerate(self.pairs):
-                if n1 == n:
-                    npls = [p for p in pls if p[0] in s]
-                    if len(npls) < len(pls):
-                        todo.append(n2)
-                        self.pairs[i] = ((n1, n2), npls)
-                elif n2 == n:
-                    npls = [p for p in pls if p[1] in s]
-                    if len(npls) < len(pls):
-                        todo.append(n1)
-                        self.pairs[i] = ((n1, n2), npls)
-    def make_dict(self):
-        for (n1, n2), pairs in self.pairs:
-            if n1 not in self.restrictions:
-                self.restrictions[n1] = {}
-            if n2 not in self.restrictions:
-                self.restrictions[n2] = {}
-            for a, b in pairs:
-                if a not in self.restrictions[n1]:
-                    self.restrictions[n1][a] = {}
-                if n2 not in self.restrictions[n1][a]:
-                    self.restrictions[n1][a][n2] = set()
-                self.restrictions[n1][a][n2].add(b)
-                if b not in self.restrictions[n2]:
-                    self.restrictions[n2][b] = {}
-                if n1 not in self.restrictions[n2][b]:
-                    self.restrictions[n2][b][n1] = set()
-                self.restrictions[n2][b][n1].add(a)
-    def possible(self, dct, name):
-        ret = self.units[name].copy()
-        for k in dct:
-            ret = ret.intersection(self.lookup(k, name, dct[k]))
-        return ret
 
 def search(db, query, order=None):
     Q = Query.parse_query(db, query, order)
