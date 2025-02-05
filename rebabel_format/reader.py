@@ -146,7 +146,7 @@ class Reader:
                                     }})
                 table.add_features('N', [self.merge_on[typ]])
                 for nodes, features in table.results():
-                    val = features[nodes['N']][self.merge_on[typ]]
+                    val = features[nodes['N']].get(self.merge_on[typ])
                     for name in val_map[val]:
                         merge_possible[name].append(nodes['N'])
 
