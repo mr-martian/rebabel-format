@@ -80,6 +80,18 @@ class SimpleTest:
             db = RBBLFile(db_name)
             self.checks(db)
 
+    def check_results(self, table, expected):
+        results = list(table.results())
+        self.assertEqual(len(expected), len(results))
+        for (units, features), exp in zip(results, expected):
+            for node, feat, val in exp:
+                self.assertIn(node, units)
+                uid = units[node]
+                self.assertIn(uid, features)
+                fdict = features[uid]
+                self.assertIn(feat, fdict)
+                self.assertEqual(val, fdict[feat])
+
 class FlexTextMergeTest(SimpleTest, unittest.TestCase):
     def commands(self, db_name):
         run_command('import', {}, infiles=['data/merge_text.flextext'],
@@ -162,3 +174,80 @@ class ConlluNLPMergeTest(SimpleTest, unittest.TestCase):
             for k in exp:
                 self.assertIn(k, fdict)
                 self.assertEqual(exp[k], fdict[k])
+
+class QueryAPITest(SimpleTest, unittest.TestCase):
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/basic.conllu'],
+                    mode='conllu', db=db_name)
+
+    def checks(self, db):
+        from rebabel_format.query import Query, ResultTable
+
+        q = Query(db)
+        S = q.unit('sentence', 'S')
+        D = q.unit('word', 'D')
+        N = q.unit('word', 'N')
+        q.add(D.parent(S))
+        q.add(N.parent(S))
+        q.add(D['meta:index'] + 1 == N['meta:index'])
+        q.add(D['UD:upos'] == 'DET')
+
+        table = ResultTable(db, q)
+        table.add_features('S', ['UD:sent_id'])
+        table.add_features('D', ['UD:lemma'])
+        table.add_features('N', ['UD:lemma'])
+
+        self.check_results(
+            table,
+            [
+                [
+                    ('S', 'UD:sent_id', '1'),
+                    ('D', 'UD:lemma', 'the'),
+                    ('N', 'UD:lemma', 'man'),
+                ],
+                [
+                    ('S', 'UD:sent_id', '2'),
+                    ('D', 'UD:lemma', 'the'),
+                    ('N', 'UD:lemma', 'woman'),
+                ],
+            ],
+        )
+
+class QueryLanguageTest(SimpleTest, unittest.TestCase):
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/basic.conllu'],
+                    mode='conllu', db=db_name)
+
+    def checks(self, db):
+        from rebabel_format.query import Query, ResultTable
+
+        q = Query.parse_query(db, '''
+        unit S sentence
+        unit D word
+        unit N word
+        D parent S
+        N parent S
+        D.meta:index + 1 = N.meta:index
+        D.UD:upos = "DET"
+        ''')
+
+        table = ResultTable(db, q)
+        table.add_features('S', ['UD:sent_id'])
+        table.add_features('D', ['UD:lemma'])
+        table.add_features('N', ['UD:lemma'])
+
+        self.check_results(
+            table,
+            [
+                [
+                    ('S', 'UD:sent_id', '1'),
+                    ('D', 'UD:lemma', 'the'),
+                    ('N', 'UD:lemma', 'man'),
+                ],
+                [
+                    ('S', 'UD:sent_id', '2'),
+                    ('D', 'UD:lemma', 'the'),
+                    ('N', 'UD:lemma', 'woman'),
+                ],
+            ],
+        )

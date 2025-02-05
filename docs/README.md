@@ -3,6 +3,7 @@
 ## For Users
 
 - [Manipulating data](manipulating.md)
+- [Queries](query.md)
 
 ## For Developers
 

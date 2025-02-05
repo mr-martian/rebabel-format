@@ -343,6 +343,9 @@ class Query:
         if not tokens:
             return
         if tokens[0].lower() == 'unit':
+            if len(tokens) < 3:
+                raise ValueError(prefix+'Missing unit type.')
+            self.unit(tokens[2:], tokens[1])
             return
         precedence = {
             '.': 7, 'has': 7, 'exists': 7, 'feature': 7,
