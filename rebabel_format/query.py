@@ -56,7 +56,7 @@ class Condition:
             qs = ', '.join(['?']*len(ids))
             return f'EXISTS (SELECT NULL FROM features F{idx} WHERE F{idx}.unit = U{self.left} AND F{idx}.feature IN ({qs}))', ids, False
         elif self.is_compare_ref_feature():
-            ql, al, sl = self.left.toSQL(feature_index)
+            ql, al, sl = self.left.toSQL(query)
             return f'{ql} = U{self.right.index}', al, False
         elif self.operator == 'parent':
             return f'EXISTS (SELECT NULL FROM relations WHERE parent = U{self.right} AND child = U{self.left} AND isprimary = ? AND active = ?)', [True, True], False
@@ -326,7 +326,7 @@ class Query:
     def search(self):
         self.prepare_search()
         for sub, idx, mn, mx in self.subqueries:
-            sub.prepare_search(self.unit_ids[idx])
+            sub.prepare_search(list(self.unit_ids[idx]))
             if mn is not None and mn > 0 and not sub.results:
                 return
         yield from self.get_results()
@@ -392,6 +392,15 @@ class Query:
                     raise ValueError(prefix+'Unexpected NOT.')
             elif ltok in precedence:
                 op = op_rename.get(ltok, ltok)
+                if op in ['feature', 'parent', 'child']:
+                    if not stack:
+                        pass
+                    elif isinstance(stack[-1], Unit):
+                        stack[-1] = stack[-1].index
+                    elif isinstance(stack[-1], Condition) and isinstance(stack[-1].right, Unit):
+                        stack[-1].right = stack[-1].right.index
+                    else:
+                        raise ValueError(prefix+f'Operator {ltok} can only apply to unit names.')
                 if len(stack) == 1 and not isinstance(stack[0], Condition):
                     stack[0] = Condition(stack[0], None, op)
                     continue
@@ -420,7 +429,9 @@ class Query:
                 else:
                     for u in self.units:
                         if u.name == val:
-                            val = u.index
+                            val = u
+                            if stack and isinstance(stack[-1], Condition) and stack[-1].operator in ['parent', 'child']:
+                                val = u.index
                             break
                     else:
                         raise ValueError(f'{prefix}Unit "{val}" is not defined.')
@@ -560,6 +571,8 @@ class ResultTable:
             dct = {}
             for l in result.values():
                 for uid in utils.as_list(l):
+                    if isinstance(uid, dict):
+                        continue
                     dct[uid] = {}
             self.features.append(dct)
         self.types = {u.name: utils.map_type(self.rev_type_map, u.type)
@@ -568,6 +581,8 @@ class ResultTable:
         for i, result in enumerate(self.nodes):
             for uid in result.values():
                 for u in utils.as_list(uid):
+                    if isinstance(u, dict):
+                        continue
                     self.unit2results[u].append(i)
 
     def _node_ids(self, name: str):

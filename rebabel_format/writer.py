@@ -2,6 +2,7 @@
 
 from rebabel_format.db import RBBLFile
 from rebabel_format.parameters import Parameter, process_parameters
+import copy
 
 ALL_WRITERS = {}
 
@@ -18,6 +19,7 @@ class Writer:
         self.other_args = kwargs
         self.parameter_values = process_parameters(self.parameters, conf, 'export', kwargs)
         if self.query:
+            self.query = copy.deepcopy(self.query)
             self.pre_query()
             if query_updates:
                 for k, v in query_updates.items():

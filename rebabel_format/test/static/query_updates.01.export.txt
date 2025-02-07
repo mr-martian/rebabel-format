@@ -1,0 +1,5 @@
+lemma,pos
+man,NOUN
+snore,VERB
+woman,NOUN
+sing,VERB

@@ -327,6 +327,17 @@ class QueryParseTrees(SimpleTest, unittest.TestCase):
           ('=',
            ('feature', 0, 'ud:form'),
            ('+', ('feature', 0, 'ud:lemma'), "ing")))),
+        ('reference',
+         '''unit N word
+         unit H word
+         N.head = H''',
+         ('AND',
+          ('AND',
+           ('=', ('feature', 0, 'meta:active'), True),
+           ('=', ('feature', 1, 'meta:active'), True)),
+          ('=',
+           ('feature', 0, 'head'),
+           ('unit', 1)))),
     ]
 
     def commands(self, db_name):
@@ -334,13 +345,17 @@ class QueryParseTrees(SimpleTest, unittest.TestCase):
                     mode='conllu', db=db_name)
 
     def validate_node(self, node, tree):
-        from rebabel_format.query import Condition
+        from rebabel_format.query import Condition, Unit
 
         if isinstance(tree, tuple):
-            self.assertIsInstance(node, Condition)
-            self.assertEqual(tree[0], node.operator)
-            self.validate_node(node.left, tree[1])
-            self.validate_node(node.right, tree[2])
+            if len(tree) == 2:
+                self.assertIsInstance(node, Unit)
+                self.assertEqual(node.index, tree[1])
+            else:
+                self.assertIsInstance(node, Condition)
+                self.assertEqual(tree[0], node.operator)
+                self.validate_node(node.left, tree[1])
+                self.validate_node(node.right, tree[2])
         else:
             self.assertEqual(tree, node)
 
