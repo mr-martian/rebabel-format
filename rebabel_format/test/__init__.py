@@ -251,3 +251,103 @@ class QueryLanguageTest(SimpleTest, unittest.TestCase):
                 ],
             ],
         )
+
+class QueryParsingErrors(SimpleTest, unittest.TestCase):
+    data = [
+        ('bad unit', 'Missing unit type.',
+         '''# typeless unit
+         unit N'''),
+        ('must have operator', 'Expected operator',
+         '''unit N word
+         N.ud:lemma (N.ud:form = "hi")'''),
+        ('empty parens', 'Empty parentheses',
+         '''unit N word
+         N.ud:lemma = "hi" AND ()'''),
+        ('incomplete parens', 'Expected operand',
+         '''unit N word
+         N.ud:lemma = "hi" AND (N.ud:form startswith)'''),
+        ('lpar', 'Parenthesis opened',
+         '''unit N word
+         (N.ud:lemma = "hi"'''),
+        ('rpar', 'Close parenthesis without',
+         '''unit N word
+         N.ud:lemma = "hi")'''),
+        ('NOT1', 'Unexpected NOT',
+         '''unit N word
+         N.ud:lemma NOT = "hi"'''),
+        ('NOT2', 'Cannot negate value',
+         '''unit N word
+         N.ud:lemma = NOT "hi"'''),
+        ('missing operator', 'Expected operator',
+         '''unit N word
+         N.ud:lemma "IS" "hi"'''),
+        ('no such unit', 'Unit "N" is not defined',
+         '''N.ud:lemma = "hi"'''),
+    ]
+
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/basic.conllu'],
+                    mode='conllu', db=db_name)
+
+    def checks(self, db):
+        from rebabel_format.query import Query
+
+        for name, err, text in self.data:
+            with self.subTest(n=name):
+                with self.assertRaisesRegex(ValueError, err):
+                    Query.parse_query(db, text)
+
+class QueryParseTrees(SimpleTest, unittest.TestCase):
+    data = [
+        ('basic',
+         '''unit N word
+         N.ud:lemma = "hi"''',
+         ('AND',
+          ('=', ('feature', 0, 'meta:active'), True),
+          ('=', ('feature', 0, 'ud:lemma'), "hi"))),
+        ('boolean',
+         '''unit N word
+         N.ud:null = false''',
+         ('AND',
+          ('=', ('feature', 0, 'meta:active'), True),
+          ('=', ('feature', 0, 'ud:null'), False))),
+        ('precedence 1',
+         '''unit N word
+         N.ud:lemma + "ing" = N.ud:form''',
+         ('AND',
+          ('=', ('feature', 0, 'meta:active'), True),
+          ('=',
+           ('+', ('feature', 0, 'ud:lemma'), "ing"),
+           ('feature', 0, 'ud:form')))),
+        ('precedence 2',
+         '''unit N word
+         N.ud:form = N.ud:lemma + "ing"''',
+         ('AND',
+          ('=', ('feature', 0, 'meta:active'), True),
+          ('=',
+           ('feature', 0, 'ud:form'),
+           ('+', ('feature', 0, 'ud:lemma'), "ing")))),
+    ]
+
+    def commands(self, db_name):
+        run_command('import', {}, infiles=['data/basic.conllu'],
+                    mode='conllu', db=db_name)
+
+    def validate_node(self, node, tree):
+        from rebabel_format.query import Condition
+
+        if isinstance(tree, tuple):
+            self.assertIsInstance(node, Condition)
+            self.assertEqual(tree[0], node.operator)
+            self.validate_node(node.left, tree[1])
+            self.validate_node(node.right, tree[2])
+        else:
+            self.assertEqual(tree, node)
+
+    def checks(self, db):
+        from rebabel_format.query import Query
+
+        for name, text, tree in self.data:
+            with self.subTest(n=name):
+                q = Query.parse_query(db, text)
+                self.validate_node(q.conditional, tree)

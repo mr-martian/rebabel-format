@@ -434,6 +434,8 @@ class Query:
             raise ValueError(prefix+'Parenthesis opened but not closed.')
         if stack[-1].right is None:
             raise ValueError(prefix+'Missing right operand.')
+        if not isinstance(stack[-1].right, Condition) and stack[-1].operator == 'NOT':
+            raise ValueError(prefix+'Cannot negate value.')
         self.add(stack[0])
 
     def parse_query_dict(self, query, order=None):
@@ -537,45 +539,6 @@ class Query:
         else:
             raise ValueError(f'Query must be dictionary or string, not {query.__type__.__name__}.')
         return Q
-
-class FeatureQuery:
-    def __init__(self, featid, value=None, operator=None):
-        self.featid = featid
-        self.value = value
-        self.operator = operator
-    def run_query(self, db, unitids=None):
-        where = [WhereClause('feature', self.featid)]
-        if unitids is not None:
-            where.append(WhereClause('unit', unitids))
-        if self.operator is None:
-            pass
-        elif self.operator == 'value':
-            where.append(WhereClause('value', self.value))
-        elif self.operator in ['value_exists', 'value_notexists']:
-            pass
-        elif '_' in self.operator:
-            op = self.operator.split('_')[1]
-            neg = False
-            if op.startswith('not'):
-                neg = True
-                op = op[3:]
-            where.append(WhereClause('value', self.value,
-                                     operator=op, negated=neg))
-        db.execute_clauses('SELECT unit, value FROM features', *where)
-    def check(self, value):
-        if self.operator == 'value_startswith':
-            return value.startswith(self.value)
-        return True
-    def is_notexist(self):
-        return ((self.operator == 'value_notexist' and self.value) or
-                (self.operator == 'value_exist' and not self.value))
-    def get_units(self, db, units=None):
-        self.run_query(db, units)
-        if self.is_notexist():
-            drop = set(x[0] for x in db.cur.fetchall())
-            return [u for u in units if u not in drop]
-        else:
-            return [x[0] for x in db.cur.fetchall() if self.check(x[1])]
 
 def search(db, query, order=None):
     Q = Query.parse_query(db, query, order)
