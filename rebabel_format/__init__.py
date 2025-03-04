@@ -59,6 +59,18 @@ def load_writers(plugins: bool) -> None:
         load_plugins('converters')
         load_plugins('writers')
 
+def load(plugins: bool = False) -> None:
+    '''
+    Import all processes and formats.
+
+    If `plugins` is True, also load any modules which define
+    the appropriate endpoints in their package declarations.
+    '''
+
+    load_processes(plugins)
+    load_readers(plugins)
+    load_writers(plugins)
+
 def get_process_names():
     '''
     Return a sorted list of all currently loaded process names.

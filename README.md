@@ -74,27 +74,14 @@ value = "3"
 
 ### Loading Modules
 
-Readers, writers, and processes are imported dynamically at startup:
+The modules which implement each supported file format and action can be imported individually, but there is also a helper function which imports all of them.
 
 ```python
-rebabel_format.load_processes(True)
-rebabel_format.load_readers(True)
-rebabel_format.load_writers(True)
+rebabel_format.load()
 ```
 
-Each function takes a single parameter indicating whether or not plugins outside this module should be loaded.
-
-Plugin packages can be created using [entry point specifiers](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/#using-package-metadata) in the package metadata. The entry point can indicate either a module or a class (any subclass of `Process`, `Reader`, or `Writer` is automatically registered on import).
-
-The loading functions check for the following plugin namespaces: `rebabel.processes`, `rebabel.converters`, `rebabel.readers`, `rebabel.writers`.
-
-After loading, lists of available names can be retrieved as follows:
-
-```python
-rebabel_format.get_process_names()
-rebabel_format.get_reader_names()
-rebabel_format.get_writer_names()
-```
+In most cases, this should be one of the first lines in a script or in an interactive shell.
+For finer-grained control over the process, see [the documentation](plugins.md).
 
 ### Inspecting Parameters
 
